@@ -105,11 +105,42 @@ Em produção, os logs são emitidos como JSON. Ao configurar `OTEL_EXPORTER_OTL
 ```bash
 dotnet format EcoMyceliumTracker.sln --verify-no-changes
 dotnet build EcoMyceliumTracker.sln
-dotnet test EcoMyceliumTracker.sln
-dotnet list EcoMyceliumTracker/EcoMyceliumTracker.csproj package --vulnerable --include-transitive
+dotnet test EcoMyceliumTracker.sln --settings coverlet.runsettings --results-directory TestResults
+python3 scripts/check-coverage.py --results TestResults --threshold 65
 ```
 
 Os testes de integração usam a variável `TEST_POSTGRES_CONNECTION`. Quando ela não está definida, eles são marcados como ignorados; a CI fornece automaticamente um PostgreSQL dedicado e executa todo o cenário HTTP.
+
+### Gates
+
+| Gate | Onde | O que reprova |
+| --- | --- | --- |
+| Formatação | `dotnet format --verify-no-changes` | qualquer desvio do `.editorconfig` |
+| Analisadores | build (`AnalysisMode=All`) | qualquer aviso, porque `TreatWarningsAsErrors` está ligado |
+| Dependências | restore (`NuGetAudit`) | pacote vulnerável, via `NU1901`–`NU1904` promovidos a erro |
+| Cobertura | `scripts/check-coverage.py` | cobertura de linha abaixo de 65% |
+| Mutação | `dotnet stryker` | score abaixo de 70% |
+
+O piso de cobertura é 65% porque a cobertura atual é 67%: ele existe para impedir regressão, não como meta. O mesmo vale para o piso de mutação.
+
+As regras de analisador desligadas estão no fim do `.editorconfig`, cada uma com o motivo. A regra é: só se desliga o que não se aplica a uma aplicação ASP.NET Core — o que aponta defeito real se corrige no código.
+
+### Mutation testing
+
+```bash
+dotnet tool restore
+dotnet stryker
+```
+
+Roda sobre `Validation/`, que é a parte coberta por testes unitários puros. No CI fica em workflow separado (manual e semanal), porque é lento demais para bloquear pull request.
+
+### Hook de pre-commit
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Roda formatação, build e testes unitários antes de cada commit. Os testes de integração ficam de fora porque exigem PostgreSQL. Para pular um commit específico: `git commit --no-verify`.
 
 ## Estrutura
 
