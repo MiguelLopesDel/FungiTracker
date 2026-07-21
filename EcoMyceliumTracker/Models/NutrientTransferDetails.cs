@@ -14,4 +14,18 @@ public sealed class NutrientTransferDetails
     public DateTimeOffset TransferredAt { get; set; }
     public string SourceLocation { get; set; } = string.Empty;
     public string TargetLocation { get; set; } = string.Empty;
+
+    public static NutrientTransferDetails From(
+        NutrientTransfer transfer,
+        Domain.TransferSensor source,
+        Domain.TransferSensor target) => new()
+        {
+            Id = transfer.Id,
+            SourceNodeId = transfer.SourceNodeId,
+            TargetNodeId = transfer.TargetNodeId,
+            CarbonAmountMg = transfer.CarbonAmountMg,
+            TransferredAt = transfer.TransferredAt,
+            SourceLocation = source.Location,
+            TargetLocation = target.Location,
+        };
 }

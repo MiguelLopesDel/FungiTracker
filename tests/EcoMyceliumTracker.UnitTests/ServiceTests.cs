@@ -273,10 +273,11 @@ public sealed class ServiceTests
     [Fact]
     public async Task CreateTransfer_WithoutTimestamp_UsesTheCurrentInstant()
     {
-        var service = NewTransferService(out _);
+        var service = NewTransferService(out var repository);
+        var (source, target) = SeedEligibleSensors(repository);
 
         var created = await service.CreateAsync(
-            new CreateNutrientTransferRequest(Guid.NewGuid(), Guid.NewGuid(), 100));
+            new CreateNutrientTransferRequest(source, target, 100));
 
         Assert.Equal(Now, created.TransferredAt);
     }
@@ -284,11 +285,12 @@ public sealed class ServiceTests
     [Fact]
     public async Task CreateTransfer_WithTimestamp_KeepsTheOneSupplied()
     {
-        var service = NewTransferService(out _);
+        var service = NewTransferService(out var repository);
+        var (source, target) = SeedEligibleSensors(repository);
         var supplied = Now.AddHours(-3);
 
         var created = await service.CreateAsync(
-            new CreateNutrientTransferRequest(Guid.NewGuid(), Guid.NewGuid(), 100, supplied));
+            new CreateNutrientTransferRequest(source, target, 100, supplied));
 
         Assert.Equal(supplied, created.TransferredAt);
     }
@@ -357,6 +359,20 @@ public sealed class ServiceTests
         Assert.Equal(DomainErrorKind.NotFound, error.Kind);
     }
 
+    /// <summary>
+    /// Two active sensors on the same network, which is what the policy needs
+    /// before a transfer between them is allowed.
+    /// </summary>
+    private static (Guid Source, Guid Target) SeedEligibleSensors(FakeTransferRepository repository)
+    {
+        var network = Guid.NewGuid();
+        var source = new TransferSensor(Guid.NewGuid(), network, IsActive: true, "(10,20)");
+        var target = new TransferSensor(Guid.NewGuid(), network, IsActive: true, "(30,40)");
+        repository.Sensors.Add(source);
+        repository.Sensors.Add(target);
+        return (source.Id, target.Id);
+    }
+
     private static TransferService NewTransferService(
         out FakeTransferRepository repository,
         int thresholdMg = 500)
@@ -364,6 +380,7 @@ public sealed class ServiceTests
         repository = new FakeTransferRepository();
         return new TransferService(
             repository,
+            new FakeUnitOfWork(),
             Options.Create(new TransferOptions { HighEnergyThresholdMg = thresholdMg }),
             Clock());
     }

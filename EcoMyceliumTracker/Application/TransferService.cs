@@ -10,6 +10,7 @@ namespace EcoMyceliumTracker.Application;
 
 public sealed class TransferService(
     ITransferRepository repository,
+    IUnitOfWork unitOfWork,
     IOptions<TransferOptions> options,
     TimeProvider timeProvider)
 {
@@ -52,6 +53,10 @@ public sealed class TransferService(
                 "A transferência informada não existe.",
                 "transfer_not_found");
 
+    /// <summary>
+    /// Reads both sensors under a lock, applies the policy and inserts, all in
+    /// one transaction, so a sensor cannot be deactivated in between.
+    /// </summary>
     public async Task<NutrientTransferDetails> CreateAsync(
         CreateNutrientTransferRequest request,
         CancellationToken cancellationToken = default)
@@ -63,7 +68,18 @@ public sealed class TransferService(
             throw DomainException.InvalidRequest(errors);
         }
 
-        return await repository.CreateAsync(
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+
+        var sensors = await repository.GetForTransferAsync(
+            request.SourceNodeId,
+            request.TargetNodeId,
+            cancellationToken);
+
+        var source = sensors.FirstOrDefault(sensor => sensor.Id == request.SourceNodeId);
+        var target = sensors.FirstOrDefault(sensor => sensor.Id == request.TargetNodeId);
+        TransferPolicy.EnsureAllowed(source, target);
+
+        var created = await repository.AddAsync(
             new NutrientTransfer
             {
                 SourceNodeId = request.SourceNodeId,
@@ -72,5 +88,9 @@ public sealed class TransferService(
                 TransferredAt = (request.TransferredAt ?? now).ToUniversalTime(),
             },
             cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return NutrientTransferDetails.From(created, source!, target!);
     }
 }

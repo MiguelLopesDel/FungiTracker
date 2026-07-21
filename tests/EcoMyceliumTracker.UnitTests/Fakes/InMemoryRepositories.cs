@@ -149,13 +149,22 @@ public sealed class FakeTransferRepository : ITransferRepository
     public Task<NutrientTransferDetails?> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
         Task.FromResult(Items.FirstOrDefault(item => item.Id == id) is { } found ? ToView(found) : null);
 
-    public Task<NutrientTransferDetails> CreateAsync(
+    public Collection<TransferSensor> Sensors { get; } = [];
+
+    public Task<IReadOnlyList<TransferSensor>> GetForTransferAsync(
+        Guid sourceNodeId,
+        Guid targetNodeId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TransferSensor>>(
+            Sensors.Where(s => s.Id == sourceNodeId || s.Id == targetNodeId).ToList());
+
+    public Task<NutrientTransfer> AddAsync(
         NutrientTransfer transfer,
         CancellationToken cancellationToken = default)
     {
         transfer.Id = Items.Count + 1;
         Items.Add(transfer);
-        return Task.FromResult(ToView(transfer));
+        return Task.FromResult(transfer);
     }
 
     private static NutrientTransferDetails ToView(NutrientTransfer item) => new()
@@ -166,4 +175,27 @@ public sealed class FakeTransferRepository : ITransferRepository
         CarbonAmountMg = item.CarbonAmountMg,
         TransferredAt = item.TransferredAt,
     };
+}
+
+/// <summary>
+/// Runs the service's transactional path without a database. Nothing to roll
+/// back, so committing is only recorded.
+/// </summary>
+public sealed class FakeUnitOfWork : IUnitOfWork
+{
+    public bool Committed { get; private set; }
+
+    public Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IUnitOfWorkTransaction>(new Scope(this));
+
+    private sealed class Scope(FakeUnitOfWork owner) : IUnitOfWorkTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            owner.Committed = true;
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }
