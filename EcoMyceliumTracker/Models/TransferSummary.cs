@@ -1,6 +1,6 @@
 ﻿namespace EcoMyceliumTracker.Models;
 
-public class TransferSummary
+public sealed class TransferSummary
 {
     public long Id { get; set; }
     public Guid SourceNodeId { get; set; }

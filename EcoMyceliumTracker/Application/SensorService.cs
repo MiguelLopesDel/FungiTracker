@@ -46,7 +46,7 @@ public sealed class SensorService(
             new SensorNode
             {
                 NetworkId = request.NetworkId,
-                Location = request.Location!.Trim(),
+                Location = Validated.Required(request.Location).Trim(),
                 MoistureLevel = request.MoistureLevel,
                 IsActive = request.IsActive,
             },
@@ -68,7 +68,7 @@ public sealed class SensorService(
             id,
             new SensorNode
             {
-                Location = request.Location!.Trim(),
+                Location = Validated.Required(request.Location).Trim(),
                 MoistureLevel = request.MoistureLevel,
                 IsActive = request.IsActive,
             },

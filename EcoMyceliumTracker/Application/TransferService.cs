@@ -12,7 +12,10 @@ public sealed class TransferService(
     IOptions<TransferOptions> options,
     TimeProvider timeProvider)
 {
-    public Task<PagedResult<TransferSummary>> GetPageAsync(
+    // async on purpose, even though it only delegates: a non-async method
+    // throws when it is called rather than when it is awaited, which would
+    // make this behave differently from every other service method.
+    public async Task<PagedResult<TransferSummary>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
@@ -24,17 +27,17 @@ public sealed class TransferService(
             throw DomainException.InvalidRequest(errors);
         }
 
-        return repository.GetPageAsync(page, pageSize, filter.ToUniversalTime(), cancellationToken);
+        return await repository.GetPageAsync(page, pageSize, filter.ToUniversalTime(), cancellationToken);
     }
 
     /// <summary>
     /// Transfers at or above the configured threshold. The bound is inclusive.
     /// </summary>
-    public Task<PagedResult<TransferSummary>> GetHighEnergyPageAsync(
+    public async Task<PagedResult<TransferSummary>> GetHighEnergyPageAsync(
         int page,
         int pageSize,
         CancellationToken cancellationToken = default) =>
-        GetPageAsync(
+        await GetPageAsync(
             page,
             pageSize,
             new TransferFilter { MinimumCarbonMg = options.Value.HighEnergyThresholdMg },

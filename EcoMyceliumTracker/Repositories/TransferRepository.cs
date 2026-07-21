@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Dapper;
 using EcoMyceliumTracker.Application;
-using EcoMyceliumTracker.Contracts;
 using EcoMyceliumTracker.Models;
 using Npgsql;
 
@@ -55,7 +54,7 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             WHERE {{filters}};
             """;
 
-        using var grid = await connection.QueryMultipleAsync(
+        await using var grid = await connection.QueryMultipleAsync(
             new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
         var items = (await grid.ReadAsync<TransferSummary>()).AsList();
         var total = await grid.ReadSingleAsync<long>();

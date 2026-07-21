@@ -35,7 +35,10 @@ public sealed class NetworkService(
         }
 
         return await repository.CreateAsync(
-            ToModel(request.ScientificName!, request.SoilType!, request.DiscoveredAt),
+            ToModel(
+                Validated.Required(request.ScientificName),
+                Validated.Required(request.SoilType),
+                request.DiscoveredAt),
             cancellationToken);
     }
 
@@ -52,7 +55,10 @@ public sealed class NetworkService(
 
         return await repository.UpdateAsync(
             id,
-            ToModel(request.ScientificName!, request.SoilType!, request.DiscoveredAt),
+            ToModel(
+                Validated.Required(request.ScientificName),
+                Validated.Required(request.SoilType),
+                request.DiscoveredAt),
             cancellationToken) ?? throw NetworkNotFound();
     }
 

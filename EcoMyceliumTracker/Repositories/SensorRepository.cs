@@ -46,7 +46,7 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
               AND (CAST(@IsActive AS boolean) IS NULL OR is_active = @IsActive);
             """;
 
-        using var grid = await connection.QueryMultipleAsync(
+        await using var grid = await connection.QueryMultipleAsync(
             new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
         var items = (await grid.ReadAsync<SensorNode>()).AsList();
         var total = await grid.ReadSingleAsync<long>();
@@ -139,14 +139,6 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
             new CommandDefinition(sql, new { Id = id, IsActive = isActive }, cancellationToken: cancellationToken));
     }
 
-    // The location arrives as text because that is how PostgreSQL renders a
-    // point. SensorService has already rejected anything unparsable, so a
-    // failure here means the stored value itself is corrupt.
-    private static Coordinates ParseLocation(string location) =>
-        CoordinatesParser.TryParse(location, out var coordinates)
-            ? coordinates
-            : throw new InvalidOperationException($"Stored location '{location}' is not a valid point.");
-
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -155,4 +147,12 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
             new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
         return affectedRows > 0;
     }
+
+    // The location arrives as text because that is how PostgreSQL renders a
+    // point. SensorService has already rejected anything unparsable, so a
+    // failure here means the stored value itself is corrupt.
+    private static Coordinates ParseLocation(string location) =>
+        CoordinatesParser.TryParse(location, out var coordinates)
+            ? coordinates
+            : throw new InvalidOperationException($"Stored location '{location}' is not a valid point.");
 }

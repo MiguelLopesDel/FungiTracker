@@ -46,7 +46,7 @@ public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumR
               AND (CAST(@SoilType AS text) IS NULL OR soil_type ILIKE '%' || @SoilType || '%' ESCAPE '\');
             """;
 
-        using var grid = await connection.QueryMultipleAsync(
+        await using var grid = await connection.QueryMultipleAsync(
             new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
         var items = (await grid.ReadAsync<MyceliumNetwork>()).AsList();
         var total = await grid.ReadSingleAsync<long>();

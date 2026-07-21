@@ -1,6 +1,6 @@
 ﻿namespace EcoMyceliumTracker.Models;
 
-public class SensorNode
+public sealed class SensorNode
 {
     public Guid Id { get; set; }
     public Guid NetworkId { get; set; }

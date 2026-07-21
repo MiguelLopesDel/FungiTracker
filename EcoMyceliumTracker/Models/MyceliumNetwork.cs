@@ -1,6 +1,6 @@
 ﻿namespace EcoMyceliumTracker.Models;
 
-public class MyceliumNetwork
+public sealed class MyceliumNetwork
 {
     public Guid Id { get; set; }
     public string ScientificName { get; set; } = string.Empty;
