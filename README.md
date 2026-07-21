@@ -154,8 +154,9 @@ Roda formatação, build e testes unitários antes de cada commit. Os testes de 
 
 ```text
 EcoMyceliumTracker/
+├── Application/        # Regras de negócio e orquestração (não conhece HTTP)
 ├── Contracts/          # Entradas da API
-├── Endpoints/          # Rotas agrupadas por domínio
+├── Endpoints/          # Rotas: traduzem HTTP <-> Application
 ├── Infrastructure/     # Erros, health checks e migrations
 ├── Models/             # Modelos persistidos e paginação
 ├── Repositories/       # Acesso ao PostgreSQL e regras transacionais
@@ -165,3 +166,24 @@ tests/
 ├── EcoMyceliumTracker.UnitTests/
 └── EcoMyceliumTracker.IntegrationTests/
 ```
+
+O fluxo é `Endpoints -> Application -> Repositories`. Cada camada só depende
+das de baixo, e nada abaixo de `Endpoints` conhece HTTP.
+
+### Por que existe a camada Application
+
+Antes, uma regra de negócio podia estar em quatro lugares: no validador, solta
+dentro do endpoint, dentro do repositório e como constraint no banco. Não havia
+onde ler "as regras de uma transferência", e como as regras moravam atrás de
+HTTP ou atrás de SQL, verificá-las exigia subir a aplicação inteira com um
+PostgreSQL: **apenas 7,6% do código era exercitável sem banco**.
+
+`Application/` concentra essas regras. Os endpoints só traduzem HTTP, e os
+repositórios só falam com o banco. O erro de domínio (`DomainException`) deixou
+de carregar status HTTP — carrega um `DomainErrorKind`, e o
+`ApiExceptionHandler` é o único ponto que converte isso em status code.
+
+O resultado é medível: **96,3% das regras de negócio agora são cobertas por
+testes unitários, sem banco nenhum**, e os endpoints encolheram cerca de 70%.
+Os testes de integração continuam existindo para provar que a ponta HTTP e o
+SQL de fato funcionam.

@@ -1,5 +1,6 @@
 ﻿using System.Threading.RateLimiting;
 using DotNetEnv;
+using EcoMyceliumTracker.Application;
 using EcoMyceliumTracker.Configuration;
 using EcoMyceliumTracker.Endpoints;
 using EcoMyceliumTracker.Infrastructure.Errors;
@@ -49,6 +50,9 @@ builder.Services.AddSingleton(serviceProvider =>
 });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<DatabaseMigrationRunner>();
+builder.Services.AddScoped<NetworkService>();
+builder.Services.AddScoped<SensorService>();
+builder.Services.AddScoped<TransferService>();
 builder.Services.AddScoped<IMyceliumRepository, MyceliumRepository>();
 builder.Services.AddScoped<ISensorRepository, SensorRepository>();
 builder.Services.AddScoped<ITransferRepository, TransferRepository>();

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Diagnostics;
+﻿using EcoMyceliumTracker.Application;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 
@@ -31,6 +32,21 @@ public sealed partial class ApiExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
+        // Field-level failures keep the ValidationProblemDetails shape, so the
+        // client still gets one entry per offending field.
+        if (exception is DomainException { Errors: { } fieldErrors })
+        {
+            LogFailedRequest(
+                logger,
+                StatusCodes.Status400BadRequest,
+                "invalid_request",
+                httpContext.Request.Path);
+
+            await Results.ValidationProblem(fieldErrors, instance: httpContext.Request.Path)
+                .ExecuteAsync(httpContext);
+            return true;
+        }
+
         var (status, title, detail, code) = MapException(exception);
 
         if (status >= StatusCodes.Status500InternalServerError)
@@ -65,8 +81,9 @@ public sealed partial class ApiExceptionHandler(
     private static (int Status, string Title, string Detail, string Code) MapException(Exception exception) =>
         exception switch
         {
+            // The single place where a domain error becomes a status code.
             DomainException domain =>
-                (domain.StatusCode, "Business rule violation", domain.Message, domain.Code),
+                (MapKind(domain.Kind), TitleFor(domain.Kind), domain.Message, domain.Code),
             // Model binding reports a malformed body by throwing this with the
             // status it wants. Letting it fall through turned every unparsable
             // payload into a 500 and an error-level log entry.
@@ -89,4 +106,18 @@ public sealed partial class ApiExceptionHandler(
                 (StatusCodes.Status500InternalServerError, "Unexpected error",
                     "An unexpected error occurred while processing the request.", "unexpected_error")
         };
+
+    private static int MapKind(DomainErrorKind kind) => kind switch
+    {
+        DomainErrorKind.NotFound => StatusCodes.Status404NotFound,
+        DomainErrorKind.Conflict => StatusCodes.Status409Conflict,
+        _ => StatusCodes.Status422UnprocessableEntity,
+    };
+
+    private static string TitleFor(DomainErrorKind kind) => kind switch
+    {
+        DomainErrorKind.NotFound => "Resource not found",
+        DomainErrorKind.Conflict => "Resource conflict",
+        _ => "Business rule violation",
+    };
 }

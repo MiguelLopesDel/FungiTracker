@@ -64,6 +64,33 @@ public static class RequestValidators
         return errors;
     }
 
+    /// <summary>
+    /// Pagination plus the filter-specific rules for listing transfers. These
+    /// used to sit inline in the endpoint, where nothing could reach them
+    /// without going through HTTP.
+    /// </summary>
+    public static Dictionary<string, string[]> ValidateTransferFilters(
+        int page,
+        int pageSize,
+        int? minimumCarbonMg,
+        DateTimeOffset? fromDate,
+        DateTimeOffset? toDate)
+    {
+        var errors = ValidatePagination(page, pageSize);
+
+        if (minimumCarbonMg < 0)
+        {
+            errors["minimumCarbonMg"] = ["O valor mínimo de carbono não pode ser negativo."];
+        }
+
+        if (fromDate > toDate)
+        {
+            errors["from"] = ["A data inicial deve ser anterior à data final."];
+        }
+
+        return errors;
+    }
+
     public static Dictionary<string, string[]> ValidatePagination(int page, int pageSize)
     {
         var errors = new Dictionary<string, string[]>();

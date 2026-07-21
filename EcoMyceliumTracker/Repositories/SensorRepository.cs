@@ -73,10 +73,7 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
         SensorNode sensor,
         CancellationToken cancellationToken = default)
     {
-        if (!CoordinatesParser.TryParse(sensor.Location, out var coordinates))
-        {
-            throw new ArgumentException("A localização deve usar o formato 'x,y'.", nameof(sensor));
-        }
+        var coordinates = ParseLocation(sensor.Location);
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         sensor.Id = Guid.NewGuid();
@@ -106,10 +103,7 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
         SensorNode sensor,
         CancellationToken cancellationToken = default)
     {
-        if (!CoordinatesParser.TryParse(sensor.Location, out var coordinates))
-        {
-            throw new ArgumentException("A localização deve usar o formato 'x,y'.", nameof(sensor));
-        }
+        var coordinates = ParseLocation(sensor.Location);
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var sql = $$"""
@@ -144,6 +138,14 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
         return await connection.QuerySingleOrDefaultAsync<SensorNode>(
             new CommandDefinition(sql, new { Id = id, IsActive = isActive }, cancellationToken: cancellationToken));
     }
+
+    // The location arrives as text because that is how PostgreSQL renders a
+    // point. SensorService has already rejected anything unparsable, so a
+    // failure here means the stored value itself is corrupt.
+    private static Coordinates ParseLocation(string location) =>
+        CoordinatesParser.TryParse(location, out var coordinates)
+            ? coordinates
+            : throw new InvalidOperationException($"Stored location '{location}' is not a valid point.");
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {

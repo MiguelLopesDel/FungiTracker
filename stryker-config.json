@@ -10,6 +10,7 @@
       "json"
     ],
     "mutate": [
+      "Application/**/*.cs",
       "Validation/**/*.cs"
     ],
     "thresholds": {

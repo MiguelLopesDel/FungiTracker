@@ -1,10 +1,5 @@
-﻿using EcoMyceliumTracker.Configuration;
+﻿using EcoMyceliumTracker.Application;
 using EcoMyceliumTracker.Contracts;
-using EcoMyceliumTracker.Infrastructure.Errors;
-using EcoMyceliumTracker.Models;
-using EcoMyceliumTracker.Repositories;
-using EcoMyceliumTracker.Validation;
-using Microsoft.Extensions.Options;
 
 namespace EcoMyceliumTracker.Endpoints;
 
@@ -22,8 +17,8 @@ public static class TransferEndpoints
         return api;
     }
 
-    private static Task<IResult> GetPageAsync(
-        ITransferRepository repository,
+    private static async Task<IResult> GetPageAsync(
+        TransferService service,
         CancellationToken cancellationToken,
         int page = 1,
         int pageSize = 20,
@@ -32,8 +27,7 @@ public static class TransferEndpoints
         Guid? targetNodeId = null,
         DateTimeOffset? from = null,
         DateTimeOffset? to = null) =>
-        GetFilteredPageAsync(
-            repository,
+        Results.Ok(await service.GetPageAsync(
             page,
             pageSize,
             minimumCarbonMg,
@@ -41,96 +35,27 @@ public static class TransferEndpoints
             targetNodeId,
             from,
             to,
-            cancellationToken);
+            cancellationToken));
 
-    private static Task<IResult> GetHighEnergyAsync(
-        ITransferRepository repository,
-        IOptions<TransferOptions> options,
+    private static async Task<IResult> GetHighEnergyAsync(
+        TransferService service,
         CancellationToken cancellationToken,
         int page = 1,
         int pageSize = 20) =>
-        GetFilteredPageAsync(
-            repository,
-            page,
-            pageSize,
-            options.Value.HighEnergyThresholdMg,
-            null,
-            null,
-            null,
-            null,
-            cancellationToken);
-
-    private static async Task<IResult> GetFilteredPageAsync(
-        ITransferRepository repository,
-        int page,
-        int pageSize,
-        int? minimumCarbonMg,
-        Guid? sourceNodeId,
-        Guid? targetNodeId,
-        DateTimeOffset? from,
-        DateTimeOffset? to,
-        CancellationToken cancellationToken)
-    {
-        var errors = RequestValidators.ValidatePagination(page, pageSize);
-        if (minimumCarbonMg < 0)
-        {
-            errors[nameof(minimumCarbonMg)] = ["O valor mínimo de carbono não pode ser negativo."];
-        }
-
-        if (from > to)
-        {
-            errors[nameof(from)] = ["A data inicial deve ser anterior à data final."];
-        }
-
-        if (errors.Count > 0)
-        {
-            return Results.ValidationProblem(errors);
-        }
-
-        var result = await repository.GetPageAsync(
-            page,
-            pageSize,
-            minimumCarbonMg,
-            sourceNodeId,
-            targetNodeId,
-            from?.ToUniversalTime(),
-            to?.ToUniversalTime(),
-            cancellationToken);
-        return Results.Ok(result);
-    }
+        Results.Ok(await service.GetHighEnergyPageAsync(page, pageSize, cancellationToken));
 
     private static async Task<IResult> GetByIdAsync(
         long id,
-        ITransferRepository repository,
-        CancellationToken cancellationToken)
-    {
-        var transfer = await repository.GetByIdAsync(id, cancellationToken);
-        return transfer is null
-            ? ApiResults.NotFound("A transferência informada não existe.")
-            : Results.Ok(transfer);
-    }
+        TransferService service,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await service.GetByIdAsync(id, cancellationToken));
 
     private static async Task<IResult> CreateAsync(
         CreateNutrientTransferRequest request,
-        ITransferRepository repository,
-        TimeProvider timeProvider,
+        TransferService service,
         CancellationToken cancellationToken)
     {
-        var now = timeProvider.GetUtcNow();
-        var errors = RequestValidators.Validate(request, now);
-        if (errors.Count > 0)
-        {
-            return Results.ValidationProblem(errors);
-        }
-
-        var transfer = new NutrientTransfer
-        {
-            SourceNodeId = request.SourceNodeId,
-            TargetNodeId = request.TargetNodeId,
-            CarbonAmountMg = request.CarbonAmountMg,
-            TransferredAt = (request.TransferredAt ?? now).ToUniversalTime()
-        };
-        var created = await repository.CreateAsync(transfer, cancellationToken);
+        var created = await service.CreateAsync(request, cancellationToken);
         return Results.Created($"/api/transfers/{created.Id}", created);
     }
 }

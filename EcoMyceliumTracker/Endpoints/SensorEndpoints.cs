@@ -1,8 +1,5 @@
-﻿using EcoMyceliumTracker.Contracts;
-using EcoMyceliumTracker.Infrastructure.Errors;
-using EcoMyceliumTracker.Models;
-using EcoMyceliumTracker.Repositories;
-using EcoMyceliumTracker.Validation;
+﻿using EcoMyceliumTracker.Application;
+using EcoMyceliumTracker.Contracts;
 
 namespace EcoMyceliumTracker.Endpoints;
 
@@ -26,116 +23,53 @@ public static class SensorEndpoints
 
     private static async Task<IResult> GetPageAsync(
         Guid networkId,
-        ISensorRepository repository,
-        IMyceliumRepository networkRepository,
+        SensorService service,
         CancellationToken cancellationToken,
         int page = 1,
         int pageSize = 20,
-        bool? isActive = null)
-    {
-        var errors = RequestValidators.ValidatePagination(page, pageSize);
-        if (errors.Count > 0)
-        {
-            return Results.ValidationProblem(errors);
-        }
-
-        if (await networkRepository.GetByIdAsync(networkId, cancellationToken) is null)
-        {
-            return ApiResults.NotFound("A rede informada não existe.");
-        }
-
-        var result = await repository.GetPageByNetworkIdAsync(
+        bool? isActive = null) =>
+        Results.Ok(await service.GetPageByNetworkIdAsync(
             networkId,
             page,
             pageSize,
             isActive,
-            cancellationToken);
-        return Results.Ok(result);
-    }
+            cancellationToken));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,
-        ISensorRepository repository,
-        CancellationToken cancellationToken)
-    {
-        var sensor = await repository.GetByIdAsync(id, cancellationToken);
-        return sensor is null
-            ? ApiResults.NotFound("O sensor informado não existe.")
-            : Results.Ok(sensor);
-    }
+        SensorService service,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await service.GetByIdAsync(id, cancellationToken));
 
     private static async Task<IResult> CreateAsync(
         CreateSensorNodeRequest request,
-        ISensorRepository repository,
-        IMyceliumRepository networkRepository,
+        SensorService service,
         CancellationToken cancellationToken)
     {
-        var errors = RequestValidators.Validate(request);
-        if (errors.Count > 0)
-        {
-            return Results.ValidationProblem(errors);
-        }
-
-        if (await networkRepository.GetByIdAsync(request.NetworkId, cancellationToken) is null)
-        {
-            return ApiResults.NotFound("A rede informada não existe.");
-        }
-
-        var sensor = new SensorNode
-        {
-            NetworkId = request.NetworkId,
-            Location = request.Location!.Trim(),
-            MoistureLevel = request.MoistureLevel,
-            IsActive = request.IsActive
-        };
-        var created = await repository.CreateAsync(sensor, cancellationToken);
+        var created = await service.CreateAsync(request, cancellationToken);
         return Results.Created($"/api/sensors/{created.Id}", created);
     }
 
     private static async Task<IResult> UpdateAsync(
         Guid id,
         UpdateSensorNodeRequest request,
-        ISensorRepository repository,
-        CancellationToken cancellationToken)
-    {
-        var errors = RequestValidators.Validate(request);
-        if (errors.Count > 0)
-        {
-            return Results.ValidationProblem(errors);
-        }
-
-        var sensor = new SensorNode
-        {
-            Location = request.Location!.Trim(),
-            MoistureLevel = request.MoistureLevel,
-            IsActive = request.IsActive
-        };
-        var updated = await repository.UpdateAsync(id, sensor, cancellationToken);
-        return updated is null
-            ? ApiResults.NotFound("O sensor informado não existe.")
-            : Results.Ok(updated);
-    }
+        SensorService service,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await service.UpdateAsync(id, request, cancellationToken));
 
     private static async Task<IResult> SetStatusAsync(
         Guid id,
         SetSensorStatusRequest request,
-        ISensorRepository repository,
-        CancellationToken cancellationToken)
-    {
-        var updated = await repository.SetActiveAsync(id, request.IsActive, cancellationToken);
-        return updated is null
-            ? ApiResults.NotFound("O sensor informado não existe.")
-            : Results.Ok(updated);
-    }
+        SensorService service,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await service.SetActiveAsync(id, request.IsActive, cancellationToken));
 
     private static async Task<IResult> DeleteAsync(
         Guid id,
-        ISensorRepository repository,
+        SensorService service,
         CancellationToken cancellationToken)
     {
-        var deleted = await repository.DeleteAsync(id, cancellationToken);
-        return deleted
-            ? Results.NoContent()
-            : ApiResults.NotFound("O sensor informado não existe.");
+        await service.DeleteAsync(id, cancellationToken);
+        return Results.NoContent();
     }
 }
