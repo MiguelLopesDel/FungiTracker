@@ -1,4 +1,5 @@
-﻿using EcoMyceliumTracker.Models;
+﻿using EcoMyceliumTracker.Application;
+using EcoMyceliumTracker.Models;
 
 namespace EcoMyceliumTracker.Repositories;
 

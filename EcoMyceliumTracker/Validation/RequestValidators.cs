@@ -1,5 +1,4 @@
 ﻿using EcoMyceliumTracker.Contracts;
-using EcoMyceliumTracker.Models;
 
 namespace EcoMyceliumTracker.Validation;
 
@@ -70,31 +69,6 @@ public static class RequestValidators
         if (request.TransferredAt > now)
         {
             errors[nameof(request.TransferredAt)] = ["A data da transferência não pode estar no futuro."];
-        }
-
-        return errors;
-    }
-
-    /// <summary>
-    /// Pagination plus the filter-specific rules for listing transfers. These
-    /// used to sit inline in the endpoint, where nothing could reach them
-    /// without going through HTTP.
-    /// </summary>
-    public static Dictionary<string, string[]> ValidateTransferFilters(
-        int page,
-        int pageSize,
-        TransferFilter filter)
-    {
-        var errors = ValidatePagination(page, pageSize);
-
-        if (filter.MinimumCarbonMg < 0)
-        {
-            errors["minimumCarbonMg"] = ["O valor mínimo de carbono não pode ser negativo."];
-        }
-
-        if (filter.From > filter.To)
-        {
-            errors["from"] = ["A data inicial deve ser anterior à data final."];
         }
 
         return errors;

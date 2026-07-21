@@ -21,7 +21,12 @@ public sealed class TransferService(
         TransferFilter filter,
         CancellationToken cancellationToken = default)
     {
-        var errors = RequestValidators.ValidateTransferFilters(page, pageSize, filter);
+        var errors = RequestValidators.ValidatePagination(page, pageSize);
+        foreach (var (field, messages) in filter.Validate())
+        {
+            errors[field] = messages;
+        }
+
         if (errors.Count > 0)
         {
             throw DomainException.InvalidRequest(errors);
