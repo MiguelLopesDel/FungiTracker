@@ -22,6 +22,9 @@ Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Nothing downstream needs to know which server is answering.
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
 builder.Logging.ClearProviders();
 if (builder.Environment.IsDevelopment())
 {
