@@ -5,7 +5,7 @@ namespace EcoMyceliumTracker.Domain;
 /// <summary>
 /// A sensor as seen while it is locked for a transfer.
 /// </summary>
-public sealed record TransferSensor(Guid Id, Guid NetworkId, bool IsActive, string Location);
+public sealed record TransferSensor(Guid Id, Guid NetworkId, bool IsActive, Coordinates Location);
 
 /// <summary>
 /// Whether a transfer between two sensors is allowed.

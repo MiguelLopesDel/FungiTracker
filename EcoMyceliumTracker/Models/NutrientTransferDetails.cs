@@ -1,4 +1,6 @@
-﻿namespace EcoMyceliumTracker.Models;
+﻿using EcoMyceliumTracker.Domain;
+
+namespace EcoMyceliumTracker.Models;
 
 /// <summary>
 /// A stored transfer plus the location of each sensor, which is how every
@@ -12,8 +14,8 @@ public sealed class NutrientTransferDetails
     public Guid TargetNodeId { get; set; }
     public int CarbonAmountMg { get; set; }
     public DateTimeOffset TransferredAt { get; set; }
-    public string SourceLocation { get; set; } = string.Empty;
-    public string TargetLocation { get; set; } = string.Empty;
+    public Coordinates SourceLocation { get; set; }
+    public Coordinates TargetLocation { get; set; }
 
     public static NutrientTransferDetails From(
         NutrientTransfer transfer,

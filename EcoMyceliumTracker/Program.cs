@@ -21,6 +21,9 @@ using OpenTelemetry.Trace;
 
 Env.Load();
 
+// Dapper needs to know how to read a point back into Coordinates.
+Dapper.SqlMapper.AddTypeHandler(new CoordinatesTypeHandler());
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Nothing downstream needs to know which server is answering.

@@ -24,7 +24,7 @@ public sealed class TransferService(
         CancellationToken cancellationToken = default)
     {
         Paging.EnsureValid(page, pageSize);
-        var errors = filter.Validate();
+        var errors = RequestValidators.Validate(filter);
 
         if (errors.Count > 0)
         {

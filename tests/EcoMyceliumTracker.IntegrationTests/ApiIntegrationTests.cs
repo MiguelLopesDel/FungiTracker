@@ -2,6 +2,7 @@
 using System.Net.Http.Json;
 using System.Text;
 using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
 
 namespace EcoMyceliumTracker.IntegrationTests;
@@ -353,12 +354,22 @@ public sealed class ApiIntegrationTests
         // A point column is read back as "(x,y)", which is not the "x,y" the
         // caller sent. The parser has to keep accepting both, otherwise an
         // update built from a previous GET would start being rejected.
-        var created = await CreateSensorAsync(client, network.Id, "10.5,20.25");
-        Assert.Equal("(10.5,20.25)", created.Location);
+        var response = await client.PostAsJsonAsync(
+            "/api/sensors",
+            new CreateSensorNodeRequest(network.Id, "10.5,20.25", 50, true));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        // Asserted on the raw body: Location is a Coordinates in the model, and
+        // what has to stay stable is the text it serialises to.
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"location\":\"(10.5,20.25)\"", body, StringComparison.Ordinal);
+
+        var created = await response.Content.ReadFromJsonAsync<SensorNode>();
+        Assert.NotNull(created);
 
         var updated = await client.PutAsJsonAsync(
             $"/api/sensors/{created.Id}",
-            new UpdateSensorNodeRequest(created.Location, 50, true));
+            new UpdateSensorNodeRequest(created.Location.ToString(), 50, true));
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
     }
 
@@ -375,8 +386,8 @@ public sealed class ApiIntegrationTests
         // The listing used to be richer than the detail: it carried both sensor
         // locations and the single-transfer responses did not.
         var created = await CreateTransferAsync(client, source.Id, target.Id, 900);
-        Assert.Equal("(10,20)", created.SourceLocation);
-        Assert.Equal("(30,40)", created.TargetLocation);
+        Assert.Equal(new Coordinates(10, 20), created.SourceLocation);
+        Assert.Equal(new Coordinates(30, 40), created.TargetLocation);
 
         var detail = await client.GetFromJsonAsync<NutrientTransferDetails>($"/api/transfers/{created.Id}");
         Assert.NotNull(detail);

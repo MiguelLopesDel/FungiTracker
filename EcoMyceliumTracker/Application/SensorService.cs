@@ -82,7 +82,7 @@ public sealed class SensorService(
         }
     }
 
-    private static string Parsed((Dictionary<string, string[]> Errors, string Location) result) =>
+    private static Coordinates Parsed((Dictionary<string, string[]> Errors, Coordinates Location) result) =>
         result.Errors.Count > 0
             ? throw DomainException.InvalidRequest(result.Errors)
             : result.Location;

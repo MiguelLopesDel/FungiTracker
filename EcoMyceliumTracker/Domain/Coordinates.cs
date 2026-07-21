@@ -1,4 +1,6 @@
 ﻿using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace EcoMyceliumTracker.Domain;
 
@@ -7,7 +9,41 @@ namespace EcoMyceliumTracker.Domain;
 // the repository needs it to write, and the validator only borrows it to
 // decide whether an input is well formed.
 
-public readonly record struct Coordinates(double X, double Y);
+/// <summary>
+/// A sensor position. Carrying the pair as a type keeps the "is a point"
+/// check at the edge, where the text is parsed once, instead of leaving a
+/// string to be re-parsed by whoever needs the numbers.
+/// </summary>
+/// <remarks>
+/// Serialised as the same "(x,y)" text PostgreSQL prints and callers already
+/// send, so the wire format is unchanged by the type.
+/// </remarks>
+[JsonConverter(typeof(CoordinatesJsonConverter))]
+public readonly record struct Coordinates(double X, double Y)
+{
+    public override string ToString() =>
+        string.Create(CultureInfo.InvariantCulture, $"({X},{Y})");
+}
+
+public sealed class CoordinatesJsonConverter : JsonConverter<Coordinates>
+{
+    public override Coordinates Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options) =>
+        CoordinatesParser.TryParse(reader.GetString(), out var coordinates)
+            ? coordinates
+            : throw new JsonException("Expected a point in the format 'x,y'.");
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        Coordinates value,
+        JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        writer.WriteStringValue(value.ToString());
+    }
+}
 
 public static class CoordinatesParser
 {

@@ -72,6 +72,31 @@ public static class RequestValidators
         return errors;
     }
 
+    /// <summary>
+    /// Checks the criteria of a transfer listing.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than on TransferFilter itself: the keys are query string
+    /// parameter names, which is knowledge of the HTTP boundary that a domain
+    /// type has no business carrying.
+    /// </remarks>
+    public static Dictionary<string, string[]> Validate(TransferFilter filter)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (filter.MinimumCarbonMg < 0)
+        {
+            errors["minimumCarbonMg"] = ["O valor mínimo de carbono não pode ser negativo."];
+        }
+
+        if (filter.From > filter.To)
+        {
+            errors["from"] = ["A data inicial deve ser anterior à data final."];
+        }
+
+        return errors;
+    }
+
     public static Dictionary<string, string[]> ValidatePagination(int page, int pageSize)
     {
         var errors = new Dictionary<string, string[]>();
@@ -164,7 +189,7 @@ public static class RequestValidators
     /// Checks a new sensor in one pass, so a request with both a bad location
     /// and a missing network reports both.
     /// </summary>
-    public static (Dictionary<string, string[]> Errors, string Location) ParseSensor(
+    public static (Dictionary<string, string[]> Errors, Coordinates Location) ParseSensor(
         CreateSensorNodeRequest request)
     {
         var (errors, location) = ParseSensor(request.Location, request.MoistureLevel);
@@ -179,13 +204,14 @@ public static class RequestValidators
     /// <summary>
     /// Checks a sensor and hands back its location, trimmed and non-null.
     /// </summary>
-    public static (Dictionary<string, string[]> Errors, string Location) ParseSensor(
+    public static (Dictionary<string, string[]> Errors, Coordinates Location) ParseSensor(
         string? location,
         decimal moistureLevel)
     {
         var errors = new Dictionary<string, string[]>();
 
-        if (!CoordinatesParser.TryParse(location, out _))
+        // The parsed value is kept: this is the only place the text is read.
+        if (!CoordinatesParser.TryParse(location, out var parsed))
         {
             errors[nameof(location)] = ["A localização deve usar o formato 'x,y', com ponto como separador decimal."];
         }
@@ -195,6 +221,6 @@ public static class RequestValidators
             errors[nameof(moistureLevel)] = [$"O nível de umidade deve estar entre {MinimumMoistureLevel} e {MaximumMoistureLevel}."];
         }
 
-        return (errors, location?.Trim() ?? string.Empty);
+        return (errors, parsed);
     }
 }

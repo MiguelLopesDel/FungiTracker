@@ -12,7 +12,7 @@ public sealed class TransferPolicyTests
     private static readonly Guid Network = Guid.NewGuid();
 
     private static TransferSensor Sensor(bool isActive = true, Guid? network = null) =>
-        new(Guid.NewGuid(), network ?? Network, isActive, "(1,2)");
+        new(Guid.NewGuid(), network ?? Network, isActive, new Coordinates(1, 2));
 
     [Fact]
     public void TwoActiveSensorsOnTheSameNetwork_AreAllowed() =>

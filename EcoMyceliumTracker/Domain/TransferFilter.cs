@@ -18,28 +18,6 @@ public sealed record TransferFilter
     public DateTimeOffset? To { get; init; }
 
     /// <summary>
-    /// Field-level problems with the criteria themselves. These are invariants
-    /// of the filter, so they travel with it rather than with any one caller.
-    /// </summary>
-    public Dictionary<string, string[]> Validate()
-    {
-        var errors = new Dictionary<string, string[]>();
-
-        if (MinimumCarbonMg < 0)
-        {
-            // Keys match the query string parameter names, not the property names.
-            errors["minimumCarbonMg"] = ["O valor mínimo de carbono não pode ser negativo."];
-        }
-
-        if (From > To)
-        {
-            errors["from"] = ["A data inicial deve ser anterior à data final."];
-        }
-
-        return errors;
-    }
-
-    /// <summary>
     /// The same filter with both instants moved to UTC, which is how they are
     /// stored.
     /// </summary>

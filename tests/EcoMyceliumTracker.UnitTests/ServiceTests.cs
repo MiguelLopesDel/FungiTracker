@@ -149,7 +149,7 @@ public sealed class ServiceTests
         var created = await service.CreateAsync(
             new CreateSensorNodeRequest(network.Id, "  (10.5, 20.25)  ", 60, true));
 
-        Assert.Equal("(10.5, 20.25)", created.Location);
+        Assert.Equal(new Coordinates(10.5, 20.25), created.Location);
         Assert.Equal(network.Id, created.NetworkId);
         Assert.Single(sensors.Items);
     }
@@ -182,14 +182,14 @@ public sealed class ServiceTests
     public async Task UpdateSensor_AppliesTheNewValues()
     {
         var sensors = new FakeSensorRepository();
-        var stored = await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), Location = "1,2", MoistureLevel = 10 });
+        var stored = await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), Location = new Coordinates(1, 2), MoistureLevel = 10 });
         var service = new SensorService(sensors, new FakeNetworkRepository());
 
         var updated = await service.UpdateAsync(
             stored.Id,
             new UpdateSensorNodeRequest("30,40", 77, false));
 
-        Assert.Equal("30,40", updated.Location);
+        Assert.Equal(new Coordinates(30, 40), updated.Location);
         Assert.Equal(77, updated.MoistureLevel);
         Assert.False(updated.IsActive);
     }
@@ -221,7 +221,7 @@ public sealed class ServiceTests
     public async Task GetSensor_WhenPresent_IsReturned()
     {
         var sensors = new FakeSensorRepository();
-        var stored = await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), Location = "1,2" });
+        var stored = await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), Location = new Coordinates(1, 2) });
         var service = new SensorService(sensors, new FakeNetworkRepository());
 
         Assert.Equal(stored.Id, (await service.GetByIdAsync(stored.Id)).Id);
@@ -366,8 +366,8 @@ public sealed class ServiceTests
     private static (Guid Source, Guid Target) SeedEligibleSensors(FakeTransferRepository repository)
     {
         var network = Guid.NewGuid();
-        var source = new TransferSensor(Guid.NewGuid(), network, IsActive: true, "(10,20)");
-        var target = new TransferSensor(Guid.NewGuid(), network, IsActive: true, "(30,40)");
+        var source = new TransferSensor(Guid.NewGuid(), network, IsActive: true, new Coordinates(10, 20));
+        var target = new TransferSensor(Guid.NewGuid(), network, IsActive: true, new Coordinates(30, 40));
         repository.Sensors.Add(source);
         repository.Sensors.Add(target);
         return (source.Id, target.Id);

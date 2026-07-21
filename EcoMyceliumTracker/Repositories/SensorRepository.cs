@@ -1,5 +1,4 @@
 ﻿using Dapper;
-using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
 
 namespace EcoMyceliumTracker.Repositories;
@@ -72,8 +71,6 @@ public sealed class SensorRepository(IDbSession session) : ISensorRepository
         SensorNode sensor,
         CancellationToken cancellationToken = default)
     {
-        var coordinates = ParseLocation(sensor.Location);
-
         await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             INSERT INTO sensor_nodes (id, network_id, location, moisture_level, is_active)
@@ -88,8 +85,8 @@ public sealed class SensorRepository(IDbSession session) : ISensorRepository
                 {
                     sensor.Id,
                     sensor.NetworkId,
-                    coordinates.X,
-                    coordinates.Y,
+                    sensor.Location.X,
+                    sensor.Location.Y,
                     sensor.MoistureLevel,
                     sensor.IsActive
                 },
@@ -101,8 +98,6 @@ public sealed class SensorRepository(IDbSession session) : ISensorRepository
         SensorNode sensor,
         CancellationToken cancellationToken = default)
     {
-        var coordinates = ParseLocation(sensor.Location);
-
         await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             UPDATE sensor_nodes
@@ -116,7 +111,7 @@ public sealed class SensorRepository(IDbSession session) : ISensorRepository
         return await lease.Connection.QuerySingleOrDefaultAsync<SensorNode>(
             new CommandDefinition(
                 sql,
-                new { Id = id, coordinates.X, coordinates.Y, sensor.MoistureLevel, sensor.IsActive },
+                new { Id = id, sensor.Location.X, sensor.Location.Y, sensor.MoistureLevel, sensor.IsActive },
                 transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
@@ -145,12 +140,4 @@ public sealed class SensorRepository(IDbSession session) : ISensorRepository
             new CommandDefinition(sql, new { Id = id }, transaction: lease.Transaction, cancellationToken: cancellationToken));
         return affectedRows > 0;
     }
-
-    // The location arrives as text because that is how PostgreSQL renders a
-    // point. SensorService has already rejected anything unparsable, so a
-    // failure here means the stored value itself is corrupt.
-    private static Coordinates ParseLocation(string location) =>
-        CoordinatesParser.TryParse(location, out var coordinates)
-            ? coordinates
-            : throw new InvalidOperationException($"Stored location '{location}' is not a valid point.");
 }
