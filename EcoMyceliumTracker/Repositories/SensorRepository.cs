@@ -1,57 +1,158 @@
-using Dapper;
-using Npgsql;
+﻿using Dapper;
 using EcoMyceliumTracker.Models;
+using EcoMyceliumTracker.Validation;
+using Npgsql;
 
 namespace EcoMyceliumTracker.Repositories;
 
-public class SensorRepository : ISensorRepository
+public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepository
 {
-    private readonly string _connectionString;
+    private const string SelectColumns = """
+        id,
+        network_id AS NetworkId,
+        location::text AS Location,
+        moisture_level AS MoistureLevel,
+        is_active AS IsActive
+        """;
 
-    public SensorRepository(IConfiguration configuration)
+    public async Task<PagedResult<SensorNode>> GetPageByNetworkIdAsync(
+        Guid networkId,
+        int page,
+        int pageSize,
+        bool? isActive,
+        CancellationToken cancellationToken = default)
     {
-        _connectionString = configuration.GetConnectionString("PostgresConnection")!;
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var parameters = new
+        {
+            NetworkId = networkId,
+            IsActive = isActive,
+            PageSize = pageSize,
+            // Widened before multiplying: page is only bounded from below, so
+            // int arithmetic here overflows into a negative OFFSET.
+            Offset = (long)(page - 1) * pageSize
+        };
+        var sql = $$"""
+            SELECT {{SelectColumns}}
+            FROM sensor_nodes
+            WHERE network_id = @NetworkId
+              AND (CAST(@IsActive AS boolean) IS NULL OR is_active = @IsActive)
+            ORDER BY id
+            LIMIT @PageSize OFFSET @Offset;
+
+            SELECT COUNT(*)
+            FROM sensor_nodes
+            WHERE network_id = @NetworkId
+              AND (CAST(@IsActive AS boolean) IS NULL OR is_active = @IsActive);
+            """;
+
+        await using var grid = await connection.QueryMultipleAsync(
+            new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
+        var items = (await grid.ReadAsync<SensorNode>()).AsList();
+        var total = await grid.ReadSingleAsync<long>();
+
+        return new PagedResult<SensorNode>(items, page, pageSize, total);
     }
 
-    private NpgsqlConnection GetConnection() => new NpgsqlConnection(_connectionString);
-
-    public async Task<IEnumerable<SensorNode>> GetByNetworkIdAsync(Guid networkId)
+    public async Task<SensorNode?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
-        using var connection = GetConnection();
-        var sql = @"SELECT id, 
-                           network_id as NetworkId, 
-                           location::text as Location, 
-                           moisture_level as MoistureLevel, 
-                           is_active as IsActive 
-                    FROM sensor_nodes 
-                    WHERE network_id = $1";
-                    
-        return await connection.QueryAsync<SensorNode>(sql, new { networkId });
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var sql = $$"""
+            SELECT {{SelectColumns}}
+            FROM sensor_nodes
+            WHERE id = @Id;
+            """;
+
+        return await connection.QuerySingleOrDefaultAsync<SensorNode>(
+            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<Guid> CreateAsync(SensorNode sensor)
+    public async Task<SensorNode> CreateAsync(
+        SensorNode sensor,
+        CancellationToken cancellationToken = default)
     {
-        using var connection = GetConnection();
-        var sql = @"INSERT INTO sensor_nodes (id, network_id, location, moisture_level, is_active) 
-                    VALUES ($1, $2, point($3, $4), $5, $6) 
-                    RETURNING id;";
+        var coordinates = ParseLocation(sensor.Location);
 
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         sensor.Id = Guid.NewGuid();
+        var sql = $$"""
+            INSERT INTO sensor_nodes (id, network_id, location, moisture_level, is_active)
+            VALUES (@Id, @NetworkId, point(@X, @Y), @MoistureLevel, @IsActive)
+            RETURNING {{SelectColumns}};
+            """;
 
-        var coordenadas = sensor.Location.Split(',');
-        double x = coordenadas.Length > 0 && double.TryParse(coordenadas[0], out var resX) ? resX : 0;
-        double y = coordenadas.Length > 1 && double.TryParse(coordenadas[1], out var resY) ? resY : 0;
-
-        await connection.ExecuteAsync(sql, new 
-        { 
-            sensor.Id, 
-            sensor.NetworkId, 
-            x, 
-            y, 
-            sensor.MoistureLevel, 
-            sensor.IsActive 
-        });
-
-        return sensor.Id;
+        return await connection.QuerySingleAsync<SensorNode>(
+            new CommandDefinition(
+                sql,
+                new
+                {
+                    sensor.Id,
+                    sensor.NetworkId,
+                    coordinates.X,
+                    coordinates.Y,
+                    sensor.MoistureLevel,
+                    sensor.IsActive
+                },
+                cancellationToken: cancellationToken));
     }
+
+    public async Task<SensorNode?> UpdateAsync(
+        Guid id,
+        SensorNode sensor,
+        CancellationToken cancellationToken = default)
+    {
+        var coordinates = ParseLocation(sensor.Location);
+
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var sql = $$"""
+            UPDATE sensor_nodes
+            SET location = point(@X, @Y),
+                moisture_level = @MoistureLevel,
+                is_active = @IsActive
+            WHERE id = @Id
+            RETURNING {{SelectColumns}};
+            """;
+
+        return await connection.QuerySingleOrDefaultAsync<SensorNode>(
+            new CommandDefinition(
+                sql,
+                new { Id = id, coordinates.X, coordinates.Y, sensor.MoistureLevel, sensor.IsActive },
+                cancellationToken: cancellationToken));
+    }
+
+    public async Task<SensorNode?> SetActiveAsync(
+        Guid id,
+        bool isActive,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var sql = $$"""
+            UPDATE sensor_nodes
+            SET is_active = @IsActive
+            WHERE id = @Id
+            RETURNING {{SelectColumns}};
+            """;
+
+        return await connection.QuerySingleOrDefaultAsync<SensorNode>(
+            new CommandDefinition(sql, new { Id = id, IsActive = isActive }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        const string sql = "DELETE FROM sensor_nodes WHERE id = @Id;";
+        var affectedRows = await connection.ExecuteAsync(
+            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
+        return affectedRows > 0;
+    }
+
+    // The location arrives as text because that is how PostgreSQL renders a
+    // point. SensorService has already rejected anything unparsable, so a
+    // failure here means the stored value itself is corrupt.
+    private static Coordinates ParseLocation(string location) =>
+        CoordinatesParser.TryParse(location, out var coordinates)
+            ? coordinates
+            : throw new InvalidOperationException($"Stored location '{location}' is not a valid point.");
 }

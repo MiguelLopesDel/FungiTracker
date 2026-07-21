@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: mycelium_tracker_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d mycelium_tracker_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_POSTGRES_CONNECTION: Host=localhost;Port=5432;Database=mycelium_tracker_test;Username=postgres;Password=postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore EcoMyceliumTracker.sln --locked-mode
+
+      - name: Check formatting
+        run: dotnet format EcoMyceliumTracker.sln --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build EcoMyceliumTracker.sln --configuration Release --no-restore
+
+      - name: Test
+        run: >-
+          dotnet test EcoMyceliumTracker.sln
+          --configuration Release
+          --no-build
+          --settings coverlet.runsettings
+          --results-directory TestResults
+
+      - name: Check coverage
+        run: python3 scripts/check-coverage.py --results TestResults --threshold 85
+
+      # NuGetAudit already fails the Restore step on a vulnerable package,
+      # because Directory.Build.props promotes NU1901-NU1904 to errors. This
+      # step only prints the detail, since `dotnet list package` always exits 0.
+      - name: Report dependency audit
+        if: always()
+        run: dotnet list EcoMyceliumTracker.sln package --vulnerable --include-transitive
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: TestResults/**/coverage.cobertura.xml
+          if-no-files-found: error

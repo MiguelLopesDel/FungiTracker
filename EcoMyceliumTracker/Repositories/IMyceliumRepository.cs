@@ -1,8 +1,18 @@
-using EcoMyceliumTracker.Models;
+﻿using EcoMyceliumTracker.Models;
+
 namespace EcoMyceliumTracker.Repositories;
 
 public interface IMyceliumRepository
 {
-    Task<IEnumerable<MyceliumNetwork>> GetAllAsync();
-    Task<Guid> CreateAsync(MyceliumNetwork network);
+    Task<PagedResult<MyceliumNetwork>> GetPageAsync(
+        int page,
+        int pageSize,
+        string? scientificName,
+        string? soilType,
+        CancellationToken cancellationToken = default);
+
+    Task<MyceliumNetwork?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<MyceliumNetwork> CreateAsync(MyceliumNetwork network, CancellationToken cancellationToken = default);
+    Task<MyceliumNetwork?> UpdateAsync(Guid id, MyceliumNetwork network, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }

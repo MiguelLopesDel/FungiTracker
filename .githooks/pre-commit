@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Runs the fast half of the CI pipeline before a commit is created.
+#
+# Enable it once per clone:
+#   git config core.hooksPath .githooks
+#
+# Integration tests are left out on purpose: they need a PostgreSQL instance
+# and CI already runs them. Skip a run with `git commit --no-verify`.
+
+set -euo pipefail
+
+echo "pre-commit: checking formatting"
+dotnet format EcoMyceliumTracker.sln --verify-no-changes --no-restore
+
+echo "pre-commit: building"
+dotnet build EcoMyceliumTracker.sln --configuration Release --no-restore
+
+echo "pre-commit: running unit tests"
+dotnet test tests/EcoMyceliumTracker.UnitTests \
+    --configuration Release \
+    --no-build
+
+echo "pre-commit: ok"
