@@ -131,7 +131,7 @@ public sealed class FakeTransferRepository : ITransferRepository
 
     public int? LastMinimumCarbonMg { get; private set; }
 
-    public Task<PagedResult<TransferSummary>> GetPageAsync(
+    public Task<PagedResult<TransferView>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
@@ -141,28 +141,30 @@ public sealed class FakeTransferRepository : ITransferRepository
 
         var matches = Items
             .Where(item => filter.MinimumCarbonMg is null || item.CarbonAmountMg >= filter.MinimumCarbonMg)
-            .Select(item => new TransferSummary
-            {
-                Id = item.Id,
-                SourceNodeId = item.SourceNodeId,
-                TargetNodeId = item.TargetNodeId,
-                CarbonAmountMg = item.CarbonAmountMg,
-                TransferredAt = item.TransferredAt,
-            })
+            .Select(ToView)
             .ToList();
 
-        return Task.FromResult(new PagedResult<TransferSummary>(matches, page, pageSize, matches.Count));
+        return Task.FromResult(new PagedResult<TransferView>(matches, page, pageSize, matches.Count));
     }
 
-    public Task<NutrientTransfer?> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Items.FirstOrDefault(item => item.Id == id));
+    public Task<TransferView?> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.FirstOrDefault(item => item.Id == id) is { } found ? ToView(found) : null);
 
-    public Task<NutrientTransfer> CreateAsync(
+    public Task<TransferView> CreateAsync(
         NutrientTransfer transfer,
         CancellationToken cancellationToken = default)
     {
         transfer.Id = Items.Count + 1;
         Items.Add(transfer);
-        return Task.FromResult(transfer);
+        return Task.FromResult(ToView(transfer));
     }
+
+    private static TransferView ToView(NutrientTransfer item) => new()
+    {
+        Id = item.Id,
+        SourceNodeId = item.SourceNodeId,
+        TargetNodeId = item.TargetNodeId,
+        CarbonAmountMg = item.CarbonAmountMg,
+        TransferredAt = item.TransferredAt,
+    };
 }

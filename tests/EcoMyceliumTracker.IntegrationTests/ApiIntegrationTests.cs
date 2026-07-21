@@ -186,7 +186,7 @@ public sealed class ApiIntegrationTests
             new CreateNutrientTransferRequest(source.Id, target.Id, 100));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var created = await response.Content.ReadFromJsonAsync<NutrientTransfer>();
+        var created = await response.Content.ReadFromJsonAsync<TransferView>();
         Assert.NotNull(created);
         Assert.InRange(created.TransferredAt, before, DateTimeOffset.UtcNow.AddSeconds(5));
     }
@@ -206,7 +206,7 @@ public sealed class ApiIntegrationTests
         var atThreshold = await CreateTransferAsync(client, source.Id, target.Id, 500);
         var belowThreshold = await CreateTransferAsync(client, source.Id, target.Id, 499);
 
-        var page = await client.GetFromJsonAsync<PagedResult<TransferSummary>>(
+        var page = await client.GetFromJsonAsync<PagedResult<TransferView>>(
             "/api/transfers/high-energy?pageSize=100");
         Assert.NotNull(page);
 
@@ -367,6 +367,59 @@ public sealed class ApiIntegrationTests
     }
 
     [PostgresFact]
+    public async Task EveryTransferEndpoint_ReturnsTheSameShape()
+    {
+        using var client = CreateAuthenticatedClient(out var factory);
+        await using var _ = factory;
+
+        var network = await CreateNetworkAsync(client, $"Shape-{Guid.NewGuid():N}");
+        var source = await CreateSensorAsync(client, network.Id, "10,20");
+        var target = await CreateSensorAsync(client, network.Id, "30,40");
+
+        // The listing used to be richer than the detail: it carried both sensor
+        // locations and the single-transfer responses did not.
+        var created = await CreateTransferAsync(client, source.Id, target.Id, 900);
+        Assert.Equal("(10,20)", created.SourceLocation);
+        Assert.Equal("(30,40)", created.TargetLocation);
+
+        var detail = await client.GetFromJsonAsync<TransferView>($"/api/transfers/{created.Id}");
+        Assert.NotNull(detail);
+        Assert.Equal(created.SourceLocation, detail.SourceLocation);
+        Assert.Equal(created.TargetLocation, detail.TargetLocation);
+
+        var page = await client.GetFromJsonAsync<PagedResult<TransferView>>(
+            $"/api/transfers?sourceNodeId={source.Id}");
+        Assert.NotNull(page);
+        var listed = Assert.Single(page.Items);
+        Assert.Equal(created.SourceLocation, listed.SourceLocation);
+        Assert.Equal(created.TargetLocation, listed.TargetLocation);
+    }
+
+    [PostgresFact]
+    public async Task EveryListing_WorksWithoutExplicitPaging()
+    {
+        using var client = CreateAuthenticatedClient(out var factory);
+        await using var _ = factory;
+
+        var network = await CreateNetworkAsync(client, $"Paging-{Guid.NewGuid():N}");
+
+        // Every test used to pass page and pageSize explicitly, which hid a
+        // binding regression where the transfer listing answered 400 unless
+        // paging was stated.
+        foreach (var path in new[]
+        {
+            "/api/networks",
+            "/api/transfers",
+            "/api/transfers/high-energy",
+            $"/api/networks/{network.Id}/sensors",
+        })
+        {
+            var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+    }
+
+    [PostgresFact]
     public async Task ApiRateLimit_IsAppliedPerClient()
     {
         var connectionString = PostgresFactAttribute.RequiredConnectionString();
@@ -387,7 +440,7 @@ public sealed class ApiIntegrationTests
         return client;
     }
 
-    private static async Task<NutrientTransfer> CreateTransferAsync(
+    private static async Task<TransferView> CreateTransferAsync(
         HttpClient client,
         Guid sourceId,
         Guid targetId,
@@ -397,7 +450,7 @@ public sealed class ApiIntegrationTests
             "/api/transfers",
             new CreateNutrientTransferRequest(sourceId, targetId, carbonAmountMg));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<NutrientTransfer>())!;
+        return (await response.Content.ReadFromJsonAsync<TransferView>())!;
     }
 
     private static async Task<SensorNode> CreateSensorAsync(

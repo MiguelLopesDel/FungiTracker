@@ -15,7 +15,7 @@ public sealed class TransferService(
     // async on purpose, even though it only delegates: a non-async method
     // throws when it is called rather than when it is awaited, which would
     // make this behave differently from every other service method.
-    public async Task<PagedResult<TransferSummary>> GetPageAsync(
+    public async Task<PagedResult<TransferView>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
@@ -33,7 +33,7 @@ public sealed class TransferService(
     /// <summary>
     /// Transfers at or above the configured threshold. The bound is inclusive.
     /// </summary>
-    public async Task<PagedResult<TransferSummary>> GetHighEnergyPageAsync(
+    public async Task<PagedResult<TransferView>> GetHighEnergyPageAsync(
         int page,
         int pageSize,
         CancellationToken cancellationToken = default) =>
@@ -43,13 +43,13 @@ public sealed class TransferService(
             new TransferFilter { MinimumCarbonMg = options.Value.HighEnergyThresholdMg },
             cancellationToken);
 
-    public async Task<NutrientTransfer> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
+    public async Task<TransferView> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
         await repository.GetByIdAsync(id, cancellationToken)
             ?? throw DomainException.NotFound(
                 "A transferência informada não existe.",
                 "transfer_not_found");
 
-    public async Task<NutrientTransfer> CreateAsync(
+    public async Task<TransferView> CreateAsync(
         CreateNutrientTransferRequest request,
         CancellationToken cancellationToken = default)
     {

@@ -1,20 +1,27 @@
 ﻿using EcoMyceliumTracker.Models;
+using EcoMyceliumTracker.Validation;
 
 namespace EcoMyceliumTracker.Contracts;
 
 /// <summary>
 /// Query string of the transfer listing, bound as a single parameter.
 /// </summary>
-public sealed record TransferListQuery
+/// <remarks>
+/// The defaults sit on constructor parameters rather than on property
+/// initializers. [AsParameters] assigns every property from the query string,
+/// so an absent value overwrote the initializer with default(int), page became
+/// 0 and the listing answered 400 whenever paging was not stated explicitly.
+/// Bound through the constructor, an absent value keeps the default.
+/// </remarks>
+public sealed record TransferListQuery(
+    int Page = 1,
+    int PageSize = RequestValidators.DefaultPageSize,
+    int? MinimumCarbonMg = null,
+    Guid? SourceNodeId = null,
+    Guid? TargetNodeId = null,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null)
 {
-    public int Page { get; init; } = 1;
-    public int PageSize { get; init; } = Validation.RequestValidators.DefaultPageSize;
-    public int? MinimumCarbonMg { get; init; }
-    public Guid? SourceNodeId { get; init; }
-    public Guid? TargetNodeId { get; init; }
-    public DateTimeOffset? From { get; init; }
-    public DateTimeOffset? To { get; init; }
-
     public TransferFilter ToFilter() => new()
     {
         MinimumCarbonMg = MinimumCarbonMg,

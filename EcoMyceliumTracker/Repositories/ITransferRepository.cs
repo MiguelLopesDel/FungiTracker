@@ -4,12 +4,12 @@ namespace EcoMyceliumTracker.Repositories;
 
 public interface ITransferRepository
 {
-    Task<PagedResult<TransferSummary>> GetPageAsync(
+    Task<PagedResult<TransferView>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
         CancellationToken cancellationToken = default);
 
-    Task<NutrientTransfer?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
-    Task<NutrientTransfer> CreateAsync(NutrientTransfer transfer, CancellationToken cancellationToken = default);
+    Task<TransferView?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
+    Task<TransferView> CreateAsync(NutrientTransfer transfer, CancellationToken cancellationToken = default);
 }

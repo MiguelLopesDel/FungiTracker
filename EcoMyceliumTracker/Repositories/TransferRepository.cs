@@ -8,7 +8,17 @@ namespace EcoMyceliumTracker.Repositories;
 
 public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferRepository
 {
-    public async Task<PagedResult<TransferSummary>> GetPageAsync(
+    private const string SelectColumns = """
+        t.id AS Id,
+        t.source_node_id AS SourceNodeId,
+        t.target_node_id AS TargetNodeId,
+        t.carbon_amount_mg AS CarbonAmountMg,
+        t.transferred_at AS TransferredAt,
+        source.location::text AS SourceLocation,
+        target.location::text AS TargetLocation
+        """;
+
+    public async Task<PagedResult<TransferView>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
@@ -35,13 +45,7 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             AND (CAST(@To AS timestamptz) IS NULL OR t.transferred_at <= @To)
             """;
         var sql = $$"""
-            SELECT t.id AS Id,
-                   t.source_node_id AS SourceNodeId,
-                   t.target_node_id AS TargetNodeId,
-                   t.carbon_amount_mg AS CarbonAmountMg,
-                   t.transferred_at AS TransferredAt,
-                   source.location::text AS SourceLocation,
-                   target.location::text AS TargetLocation
+            SELECT {{SelectColumns}}
             FROM nutrient_transfers t
             JOIN sensor_nodes source ON t.source_node_id = source.id
             JOIN sensor_nodes target ON t.target_node_id = target.id
@@ -56,40 +60,43 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
 
         await using var grid = await connection.QueryMultipleAsync(
             new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
-        var items = (await grid.ReadAsync<TransferSummary>()).AsList();
+        var items = (await grid.ReadAsync<TransferView>()).AsList();
         var total = await grid.ReadSingleAsync<long>();
 
-        return new PagedResult<TransferSummary>(items, page, pageSize, total);
+        return new PagedResult<TransferView>(items, page, pageSize, total);
     }
 
-    public async Task<NutrientTransfer?> GetByIdAsync(
+    public async Task<TransferView?> GetByIdAsync(
         long id,
         CancellationToken cancellationToken = default)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        const string sql = """
-            SELECT id,
-                   source_node_id AS SourceNodeId,
-                   target_node_id AS TargetNodeId,
-                   carbon_amount_mg AS CarbonAmountMg,
-                   transferred_at AS TransferredAt
-            FROM nutrient_transfers
-            WHERE id = @Id;
+        const string sql = $"""
+            SELECT {SelectColumns}
+            FROM nutrient_transfers t
+            JOIN sensor_nodes source ON t.source_node_id = source.id
+            JOIN sensor_nodes target ON t.target_node_id = target.id
+            WHERE t.id = @Id;
             """;
 
-        return await connection.QuerySingleOrDefaultAsync<NutrientTransfer>(
+        return await connection.QuerySingleOrDefaultAsync<TransferView>(
             new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<NutrientTransfer> CreateAsync(
+    public async Task<TransferView> CreateAsync(
         NutrientTransfer transfer,
         CancellationToken cancellationToken = default)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        // The location comes along here so that building the response needs no
+        // second round trip: these are the same two sensors it would join to.
         const string sensorSql = """
-            SELECT id AS Id, network_id AS NetworkId, is_active AS IsActive
+            SELECT id AS Id,
+                   network_id AS NetworkId,
+                   is_active AS IsActive,
+                   location::text AS Location
             FROM sensor_nodes
             WHERE id = ANY(@Ids)
             ORDER BY id
@@ -140,7 +147,17 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             new CommandDefinition(insertSql, transfer, transaction, cancellationToken: cancellationToken));
 
         await transaction.CommitAsync(cancellationToken);
-        return created;
+
+        return new TransferView
+        {
+            Id = created.Id,
+            SourceNodeId = created.SourceNodeId,
+            TargetNodeId = created.TargetNodeId,
+            CarbonAmountMg = created.CarbonAmountMg,
+            TransferredAt = created.TransferredAt,
+            SourceLocation = source.Location,
+            TargetLocation = target.Location,
+        };
     }
 
     // Dapper builds this type by reflection, so no analyzer can see it being
@@ -162,5 +179,6 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
         public Guid Id { get; init; }
         public Guid NetworkId { get; init; }
         public bool IsActive { get; init; }
+        public string Location { get; init; } = string.Empty;
     }
 }

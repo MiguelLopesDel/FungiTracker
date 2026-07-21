@@ -163,7 +163,7 @@ dotnet tool restore
 dotnet stryker
 ```
 
-Roda sobre `Validation/`, que é a parte coberta por testes unitários puros. No CI fica em workflow separado (manual e semanal), porque é lento demais para bloquear pull request.
+Roda sobre `Application/` e `Validation/`, as partes cobertas por testes unitários puros. No CI fica em workflow separado (manual e semanal), porque é lento demais para bloquear pull request.
 
 ### Hook de pre-commit
 
@@ -172,6 +172,36 @@ git config core.hooksPath .githooks
 ```
 
 Roda formatação, build e testes unitários antes de cada commit. Os testes de integração ficam de fora porque exigem PostgreSQL. Para pular um commit específico: `git commit --no-verify`.
+
+## Desempenho
+
+As listagens foram medidas com 200 mil redes. Antes dos índices da migration
+`002`, toda consulta era varredura sequencial da tabela inteira:
+
+| Consulta | Antes | Depois |
+| --- | --- | --- |
+| Listagem, página 1 | 17 ms | **0,04 ms** |
+| Filtro `ILIKE` | 54 ms | **7,5 ms** |
+| `COUNT(*)` do filtro | 97 ms | **6,8 ms** |
+| Paginação profunda (`OFFSET` 100k) | 131 ms | **34 ms** |
+
+Uma listagem filtrada faz duas dessas consultas, então saiu de ~150 ms para
+~14 ms de banco.
+
+Os filtros de texto usam `ILIKE '%termo%'`. O curinga à esquerda impede o uso
+de índice btree, então eles dependem de índices trigram (`pg_trgm`). Criar a
+extensão exige um privilégio que uma instância gerenciada pode negar; se
+falhar, a migration segue sem os índices trigram e os filtros voltam a fazer
+varredura — funcionam, só mais devagar.
+
+Paginação profunda continua custando `OFFSET`: o banco ainda percorre as
+linhas puladas. Para catálogos grandes, paginação por cursor seria o próximo
+passo.
+
+Cada requisição faz um número fixo de consultas — não há N+1. As listagens
+trazem página e total num único round trip, e a criação de transferência
+aproveita os sensores que já lê sob `FOR SHARE` para montar a resposta, sem
+consulta adicional.
 
 ## Estrutura
 
