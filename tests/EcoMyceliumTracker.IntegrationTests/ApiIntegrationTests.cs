@@ -110,6 +110,50 @@ public sealed class ApiIntegrationTests
     }
 
     [PostgresFact]
+    public async Task Listing_WithPageNumberNearIntMaxValue_DoesNotOverflowTheOffset()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION")!;
+
+        await using var factory = new ApiFactory(connectionString);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
+
+        // (page - 1) * pageSize overflowed int and produced a negative OFFSET,
+        // which PostgreSQL rejects, so this used to answer 500.
+        foreach (var path in new[] { "/api/networks", "/api/transfers" })
+        {
+            var response = await client.GetAsync($"{path}?page={int.MaxValue}&pageSize=100");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+    }
+
+    [PostgresFact]
+    public async Task NetworkFilter_TreatsLikeWildcardsAsLiteralCharacters()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION")!;
+
+        await using var factory = new ApiFactory(connectionString);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
+
+        // The two names differ only at the position of the underscore, so the
+        // filter can only tell them apart when '_' is escaped into a literal.
+        var marker = Guid.NewGuid().ToString("N");
+        var literal = await CreateNetworkAsync(client, $"Wild_{marker}");
+        var other = await CreateNetworkAsync(client, $"Wilda{marker}");
+
+        // '_' is a single-character wildcard in ILIKE, so before escaping this
+        // filter also matched the network that has no underscore at all.
+        var response = await client.GetAsync($"/api/networks?scientificName=Wild_{marker}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var page = await response.Content.ReadFromJsonAsync<PagedResult<MyceliumNetwork>>();
+        Assert.NotNull(page);
+
+        Assert.Contains(page.Items, item => item.Id == literal.Id);
+        Assert.DoesNotContain(page.Items, item => item.Id == other.Id);
+    }
+
+    [PostgresFact]
     public async Task ApiRateLimit_IsAppliedPerClient()
     {
         var connectionString = Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION")!;

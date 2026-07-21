@@ -27,7 +27,9 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             From = fromDate,
             To = toDate,
             PageSize = pageSize,
-            Offset = (page - 1) * pageSize
+            // Widened before multiplying: page is only bounded from below, so
+            // int arithmetic here overflows into a negative OFFSET.
+            Offset = (long)(page - 1) * pageSize
         };
         const string filters = """
             (CAST(@MinimumCarbonMg AS integer) IS NULL OR t.carbon_amount_mg >= @MinimumCarbonMg)

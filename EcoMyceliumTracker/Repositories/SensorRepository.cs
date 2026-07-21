@@ -28,7 +28,9 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
             NetworkId = networkId,
             IsActive = isActive,
             PageSize = pageSize,
-            Offset = (page - 1) * pageSize
+            // Widened before multiplying: page is only bounded from below, so
+            // int arithmetic here overflows into a negative OFFSET.
+            Offset = (long)(page - 1) * pageSize
         };
         var sql = $$"""
             SELECT {{SelectColumns}}

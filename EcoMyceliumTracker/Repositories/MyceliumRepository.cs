@@ -27,21 +27,23 @@ public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumR
             ScientificName = NullIfWhiteSpace(scientificName),
             SoilType = NullIfWhiteSpace(soilType),
             PageSize = pageSize,
-            Offset = (page - 1) * pageSize
+            // Widened before multiplying: page is only bounded from below, so
+            // int arithmetic here overflows into a negative OFFSET.
+            Offset = (long)(page - 1) * pageSize
         };
 
         var sql = $$"""
             SELECT {{SelectColumns}}
             FROM mycelium_networks
-            WHERE (CAST(@ScientificName AS text) IS NULL OR scientific_name ILIKE '%' || @ScientificName || '%')
-              AND (CAST(@SoilType AS text) IS NULL OR soil_type ILIKE '%' || @SoilType || '%')
+            WHERE (CAST(@ScientificName AS text) IS NULL OR scientific_name ILIKE '%' || @ScientificName || '%' ESCAPE '\')
+              AND (CAST(@SoilType AS text) IS NULL OR soil_type ILIKE '%' || @SoilType || '%' ESCAPE '\')
             ORDER BY created_at DESC, id
             LIMIT @PageSize OFFSET @Offset;
 
             SELECT COUNT(*)
             FROM mycelium_networks
-            WHERE (CAST(@ScientificName AS text) IS NULL OR scientific_name ILIKE '%' || @ScientificName || '%')
-              AND (CAST(@SoilType AS text) IS NULL OR soil_type ILIKE '%' || @SoilType || '%');
+            WHERE (CAST(@ScientificName AS text) IS NULL OR scientific_name ILIKE '%' || @ScientificName || '%' ESCAPE '\')
+              AND (CAST(@SoilType AS text) IS NULL OR soil_type ILIKE '%' || @SoilType || '%' ESCAPE '\');
             """;
 
         using var grid = await connection.QueryMultipleAsync(
@@ -115,5 +117,13 @@ public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumR
     }
 
     private static string? NullIfWhiteSpace(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        string.IsNullOrWhiteSpace(value) ? null : EscapeLikePattern(value.Trim());
+
+    // '%' and '_' are wildcards inside ILIKE, so a search for a name that
+    // contains them has to escape them to stay a literal search. The escape
+    // character itself is doubled first, otherwise it would escape the escape.
+    private static string EscapeLikePattern(string value) => value
+        .Replace(@"\", @"\\", StringComparison.Ordinal)
+        .Replace("%", @"\%", StringComparison.Ordinal)
+        .Replace("_", @"\_", StringComparison.Ordinal);
 }
