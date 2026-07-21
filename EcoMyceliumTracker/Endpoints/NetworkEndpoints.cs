@@ -58,9 +58,10 @@ public static class NetworkEndpoints
     private static async Task<IResult> CreateAsync(
         CreateMyceliumNetworkRequest request,
         IMyceliumRepository repository,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var errors = RequestValidators.Validate(request);
+        var errors = RequestValidators.Validate(request, timeProvider.GetUtcNow());
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -75,9 +76,10 @@ public static class NetworkEndpoints
         Guid id,
         UpdateMyceliumNetworkRequest request,
         IMyceliumRepository repository,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var errors = RequestValidators.Validate(request);
+        var errors = RequestValidators.Validate(request, timeProvider.GetUtcNow());
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);

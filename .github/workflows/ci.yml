@@ -58,7 +58,7 @@ jobs:
           --results-directory TestResults
 
       - name: Check coverage
-        run: python3 scripts/check-coverage.py --results TestResults --threshold 70
+        run: python3 scripts/check-coverage.py --results TestResults --threshold 85
 
       # NuGetAudit already fails the Restore step on a vulnerable package,
       # because Directory.Build.props promotes NU1901-NU1904 to errors. This

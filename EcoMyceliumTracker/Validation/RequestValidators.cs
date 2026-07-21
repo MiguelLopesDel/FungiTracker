@@ -6,11 +6,15 @@ public static class RequestValidators
 {
     public const int MaximumPageSize = 100;
 
-    public static Dictionary<string, string[]> Validate(CreateMyceliumNetworkRequest request) =>
-        ValidateNetwork(request.ScientificName, request.SoilType, request.DiscoveredAt);
+    public static Dictionary<string, string[]> Validate(
+        CreateMyceliumNetworkRequest request,
+        DateTimeOffset now) =>
+        ValidateNetwork(request.ScientificName, request.SoilType, request.DiscoveredAt, now);
 
-    public static Dictionary<string, string[]> Validate(UpdateMyceliumNetworkRequest request) =>
-        ValidateNetwork(request.ScientificName, request.SoilType, request.DiscoveredAt);
+    public static Dictionary<string, string[]> Validate(
+        UpdateMyceliumNetworkRequest request,
+        DateTimeOffset now) =>
+        ValidateNetwork(request.ScientificName, request.SoilType, request.DiscoveredAt, now);
 
     public static Dictionary<string, string[]> Validate(CreateSensorNodeRequest request)
     {
@@ -80,7 +84,8 @@ public static class RequestValidators
     private static Dictionary<string, string[]> ValidateNetwork(
         string? scientificName,
         string? soilType,
-        DateTimeOffset discoveredAt)
+        DateTimeOffset discoveredAt,
+        DateTimeOffset now)
     {
         var errors = new Dictionary<string, string[]>();
 
@@ -105,6 +110,10 @@ public static class RequestValidators
         if (discoveredAt == default)
         {
             errors[nameof(discoveredAt)] = ["A data de descoberta é obrigatória."];
+        }
+        else if (discoveredAt > now)
+        {
+            errors[nameof(discoveredAt)] = ["A data de descoberta não pode estar no futuro."];
         }
 
         return errors;

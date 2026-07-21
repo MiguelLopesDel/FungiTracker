@@ -10,7 +10,7 @@ public sealed class RequestValidatorsTests
     {
         var request = new CreateMyceliumNetworkRequest(null, " ", default);
 
-        var errors = RequestValidators.Validate(request);
+        var errors = RequestValidators.Validate(request, DateTimeOffset.UtcNow);
 
         Assert.Equal(3, errors.Count);
     }
@@ -81,7 +81,7 @@ public sealed class RequestValidatorsTests
             new string('b', 100),
             DateTimeOffset.UtcNow);
 
-        Assert.Empty(RequestValidators.Validate(request));
+        Assert.Empty(RequestValidators.Validate(request, DateTimeOffset.UtcNow));
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class RequestValidatorsTests
             new string('b', 101),
             DateTimeOffset.UtcNow);
 
-        var errors = RequestValidators.Validate(request);
+        var errors = RequestValidators.Validate(request, DateTimeOffset.UtcNow);
 
         Assert.Contains("scientificName", errors.Keys);
         Assert.Contains("soilType", errors.Keys);
@@ -112,6 +112,53 @@ public sealed class RequestValidatorsTests
     }
 
     [Fact]
+    public void ValidateNetwork_WithFutureDiscoveryDate_ReturnsError()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var request = new CreateMyceliumNetworkRequest("Armillaria", "Florestal", now.AddDays(1));
+
+        Assert.Contains("discoveredAt", RequestValidators.Validate(request, now).Keys);
+    }
+
+    [Fact]
+    public void ValidateNetwork_WithDiscoveryDateExactlyNow_ReturnsNoError()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var request = new CreateMyceliumNetworkRequest("Armillaria", "Florestal", now);
+
+        Assert.DoesNotContain("discoveredAt", RequestValidators.Validate(request, now).Keys);
+    }
+
+    [Fact]
+    public void ValidateNetworkUpdate_WithFutureDiscoveryDate_ReturnsError()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var request = new UpdateMyceliumNetworkRequest("Armillaria", "Florestal", now.AddSeconds(1));
+
+        Assert.Contains("discoveredAt", RequestValidators.Validate(request, now).Keys);
+    }
+
+    [Fact]
+    public void ValidateSensor_WithEmptyNetworkId_ReturnsError()
+    {
+        var request = new CreateSensorNodeRequest(Guid.Empty, "10,20", 50, true);
+
+        Assert.Contains(nameof(request.NetworkId), RequestValidators.Validate(request).Keys);
+    }
+
+    [Fact]
+    public void ValidateTransfer_WithEmptySensorIds_ReturnsErrors()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var request = new CreateNutrientTransferRequest(Guid.Empty, Guid.Empty, 10, now);
+
+        var errors = RequestValidators.Validate(request, now);
+
+        Assert.Contains(nameof(request.SourceNodeId), errors.Keys);
+        Assert.Contains(nameof(request.TargetNodeId), errors.Keys);
+    }
+
+    [Fact]
     public void Validate_WithValidRequests_ReturnsNoErrors()
     {
         var now = DateTimeOffset.UtcNow;
@@ -123,7 +170,7 @@ public sealed class RequestValidatorsTests
             500,
             now.AddMinutes(-1));
 
-        Assert.Empty(RequestValidators.Validate(network));
+        Assert.Empty(RequestValidators.Validate(network, now));
         Assert.Empty(RequestValidators.Validate(sensor));
         Assert.Empty(RequestValidators.Validate(transfer, now));
         Assert.Empty(RequestValidators.ValidatePagination(1, 100));

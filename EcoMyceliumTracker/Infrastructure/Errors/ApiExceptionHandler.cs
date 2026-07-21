@@ -67,6 +67,12 @@ public sealed partial class ApiExceptionHandler(
         {
             DomainException domain =>
                 (domain.StatusCode, "Business rule violation", domain.Message, domain.Code),
+            // Model binding reports a malformed body by throwing this with the
+            // status it wants. Letting it fall through turned every unparsable
+            // payload into a 500 and an error-level log entry.
+            BadHttpRequestException badRequest =>
+                (badRequest.StatusCode, "Invalid request",
+                    "The request body could not be read.", "malformed_request"),
             PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } =>
                 (StatusCodes.Status409Conflict, "Resource conflict",
                     "A resource with the same unique values already exists.", "duplicate_resource"),

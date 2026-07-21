@@ -78,6 +78,14 @@ Listagens aceitam `page` e `pageSize` — o limite máximo é 100. Redes aceitam
 
 Exemplos executáveis estão em [EcoMyceliumTracker.http](EcoMyceliumTracker/EcoMyceliumTracker.http).
 
+## Regras das redes e sensores
+
+- `scientificName` (até 200 caracteres) e `soilType` (até 100) são obrigatórios.
+- `discoveredAt` é obrigatória e não pode estar no futuro.
+- `location` usa o formato `x,y` ou `(x,y)`, com ponto como separador decimal.
+- `moistureLevel` fica entre 0 e 100, inclusive.
+- Excluir uma rede exclui seus sensores e as transferências deles.
+
 ## Regras das transferências
 
 - Origem e destino devem ser sensores diferentes, ativos e pertencentes à mesma rede.
@@ -106,7 +114,7 @@ Em produção, os logs são emitidos como JSON. Ao configurar `OTEL_EXPORTER_OTL
 dotnet format EcoMyceliumTracker.sln --verify-no-changes
 dotnet build EcoMyceliumTracker.sln
 dotnet test EcoMyceliumTracker.sln --settings coverlet.runsettings --results-directory TestResults
-python3 scripts/check-coverage.py --results TestResults --threshold 70
+python3 scripts/check-coverage.py --results TestResults --threshold 85
 ```
 
 Os testes de integração usam a variável `TEST_POSTGRES_CONNECTION`. Quando ela não está definida, eles são marcados como ignorados; a CI fornece automaticamente um PostgreSQL dedicado e executa todo o cenário HTTP.
@@ -118,10 +126,10 @@ Os testes de integração usam a variável `TEST_POSTGRES_CONNECTION`. Quando el
 | Formatação | `dotnet format --verify-no-changes` | qualquer desvio do `.editorconfig` |
 | Analisadores | build (`AnalysisMode=All`) | qualquer aviso, porque `TreatWarningsAsErrors` está ligado |
 | Dependências | restore (`NuGetAudit`) | pacote vulnerável, via `NU1901`–`NU1904` promovidos a erro |
-| Cobertura | `scripts/check-coverage.py` | cobertura de linha abaixo de 70% |
+| Cobertura | `scripts/check-coverage.py` | cobertura de linha abaixo de 85% |
 | Mutação | `dotnet stryker` | score abaixo de 70% |
 
-O piso de cobertura é 70% porque a cobertura atual é 74,9%: ele existe para impedir regressão, não como meta. O mesmo vale para o piso de mutação.
+O piso de cobertura é 85% porque a cobertura atual é 88,2%: ele existe para impedir regressão, não como meta. O mesmo vale para o piso de mutação.
 
 As regras de analisador desligadas estão no fim do `.editorconfig`, cada uma com o motivo. A regra é: só se desliga o que não se aplica a uma aplicação ASP.NET Core — o que aponta defeito real se corrige no código.
 
