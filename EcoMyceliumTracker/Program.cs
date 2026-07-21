@@ -210,6 +210,14 @@ app.MapApi();
 
 await app.RunAsync();
 
+/// <summary>
+/// Exposed so WebApplicationFactory can boot this application in tests. It
+/// cannot be static: the compiler generates the entry point into it.
+/// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Minor Code Smell",
+    "S1118:Utility classes should not have public constructors",
+    Justification = "Top-level statements generate the entry point into this class.")]
 public partial class Program
 {
 }

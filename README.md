@@ -128,8 +128,29 @@ Os testes de integração usam a variável `TEST_POSTGRES_CONNECTION`. Sem ela, 
 | Formatação | `dotnet format --verify-no-changes` | qualquer desvio do `.editorconfig` |
 | Analisadores | build (`AnalysisMode=All`) | qualquer aviso, porque `TreatWarningsAsErrors` está ligado |
 | Dependências | restore (`NuGetAudit`) | pacote vulnerável, via `NU1901`–`NU1904` promovidos a erro |
+| Manutenibilidade | build (SonarAnalyzer + Roslynator) | limites da tabela abaixo |
 | Cobertura | `scripts/check-coverage.py` | cobertura de linha abaixo de 85% |
 | Mutação | `dotnet stryker` | score abaixo de 70% |
+
+#### Orçamento de manutenibilidade
+
+Os analisadores da Microsoft julgam correção e design de API, mas quase não
+falam sobre legibilidade. Estas regras cobrem o que falta e **vêm desligadas
+por padrão** — por isso nada impedia um método de 200 linhas de entrar:
+
+| Limite | Regra | Valor |
+| --- | --- | --- |
+| Complexidade cognitiva | `S3776` | 15 |
+| Complexidade ciclomática | `S1541` | 10 |
+| Linhas por método | `S138` | 80 |
+| Linhas por arquivo | `S104` | 1000 |
+| Parâmetros por método | `S107` | 7 |
+| Aninhamento de controle | `S134` | 3 |
+| Literal repetida | `S1192` | 3 ocorrências |
+| Número sem nome | `S109` | — |
+| Código comentado | `S125` | — |
+
+Todos são erro de compilação, não aviso.
 
 O piso de cobertura é 85% porque a cobertura atual é 89,8%: ele existe para impedir regressão, não como meta. O mesmo vale para o piso de mutação.
 

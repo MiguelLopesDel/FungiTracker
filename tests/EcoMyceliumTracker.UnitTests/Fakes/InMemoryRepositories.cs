@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using EcoMyceliumTracker.Contracts;
 using EcoMyceliumTracker.Models;
 using EcoMyceliumTracker.Repositories;
 
@@ -134,17 +135,13 @@ public sealed class FakeTransferRepository : ITransferRepository
     public Task<PagedResult<TransferSummary>> GetPageAsync(
         int page,
         int pageSize,
-        int? minimumCarbonMg,
-        Guid? sourceNodeId,
-        Guid? targetNodeId,
-        DateTimeOffset? fromDate,
-        DateTimeOffset? toDate,
+        TransferFilter filter,
         CancellationToken cancellationToken = default)
     {
-        LastMinimumCarbonMg = minimumCarbonMg;
+        LastMinimumCarbonMg = filter.MinimumCarbonMg;
 
         var matches = Items
-            .Where(item => minimumCarbonMg is null || item.CarbonAmountMg >= minimumCarbonMg)
+            .Where(item => filter.MinimumCarbonMg is null || item.CarbonAmountMg >= filter.MinimumCarbonMg)
             .Select(item => new TransferSummary
             {
                 Id = item.Id,

@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Dapper;
 using EcoMyceliumTracker.Application;
+using EcoMyceliumTracker.Contracts;
 using EcoMyceliumTracker.Models;
 using Npgsql;
 
@@ -11,21 +12,17 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
     public async Task<PagedResult<TransferSummary>> GetPageAsync(
         int page,
         int pageSize,
-        int? minimumCarbonMg,
-        Guid? sourceNodeId,
-        Guid? targetNodeId,
-        DateTimeOffset? fromDate,
-        DateTimeOffset? toDate,
+        TransferFilter filter,
         CancellationToken cancellationToken = default)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var parameters = new
         {
-            MinimumCarbonMg = minimumCarbonMg,
-            SourceNodeId = sourceNodeId,
-            TargetNodeId = targetNodeId,
-            From = fromDate,
-            To = toDate,
+            filter.MinimumCarbonMg,
+            filter.SourceNodeId,
+            filter.TargetNodeId,
+            filter.From,
+            filter.To,
             PageSize = pageSize,
             // Widened before multiplying: page is only bounded from below, so
             // int arithmetic here overflows into a negative OFFSET.
@@ -147,10 +144,20 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
         return created;
     }
 
+    // Dapper builds this type by reflection, so no analyzer can see it being
+    // instantiated or its properties being written.
     [SuppressMessage(
         "Performance",
         "CA1812:Avoid uninstantiated internal classes",
         Justification = "Dapper materializes this type by reflection.")]
+    [SuppressMessage(
+        "Major Code Smell",
+        "S3459:Unassigned members should be removed",
+        Justification = "Dapper assigns these when materializing the row.")]
+    [SuppressMessage(
+        "Major Code Smell",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Dapper needs the setters to materialize the row.")]
     private sealed class TransferSensorState
     {
         public Guid Id { get; init; }

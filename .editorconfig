@@ -40,6 +40,50 @@ dotnet_diagnostic.CA1515.severity = none
 # hands these methods a null argument, so the null guards would be dead code.
 dotnet_diagnostic.CA1062.severity = none
 
+# --------------------------------------------------------------------------
+# Maintainability budget
+#
+# These rules ship disabled or advisory, which is why nothing was stopping a
+# 200-line method or a magic number from being merged. They are on and fatal
+# here, with the thresholds written down instead of left implicit.
+# --------------------------------------------------------------------------
+
+# Cognitive complexity: how hard a method is to follow, not just how many
+# branches it has. Default threshold is 15.
+dotnet_diagnostic.S3776.severity = error
+
+# Cyclomatic complexity per method. Off by default in SonarAnalyzer.
+dotnet_diagnostic.S1541.severity = error
+sonar.cyclomatic.threshold = 10
+
+# Method and file length. Both off by default.
+dotnet_diagnostic.S138.severity = error
+dotnet_diagnostic.S104.severity = error
+
+# Too many parameters, nested control flow, deeply nested types.
+dotnet_diagnostic.S107.severity = error
+dotnet_diagnostic.S134.severity = error
+
+# Duplicated string literals, identical method bodies, unused parameters.
+dotnet_diagnostic.S1192.severity = error
+dotnet_diagnostic.S4144.severity = error
+dotnet_diagnostic.S1172.severity = error
+
+# Unnamed numbers. Off by default, and free to turn on here because the limits
+# that were scattered as literals are already named constants.
+dotnet_diagnostic.S109.severity = error
+
+# Naming: types, members and parameters must match .NET conventions.
+dotnet_diagnostic.S100.severity = error
+dotnet_diagnostic.S101.severity = error
+dotnet_diagnostic.S117.severity = error
+
+# Commented-out code, which is dead code that reads as documentation.
+dotnet_diagnostic.S125.severity = error
+
+# RCS1194 duplicates CA1032, which is already justified where it applies.
+dotnet_diagnostic.RCS1194.severity = none
+
 # Style rules that the formatter can enforce mechanically.
 dotnet_diagnostic.IDE0005.severity = warning
 dotnet_diagnostic.IDE0011.severity = warning

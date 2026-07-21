@@ -19,23 +19,13 @@ public static class TransferEndpoints
     }
 
     private static async Task<IResult> GetPageAsync(
+        [AsParameters] TransferListQuery query,
         TransferService service,
-        CancellationToken cancellationToken,
-        int page = 1,
-        int pageSize = RequestValidators.DefaultPageSize,
-        int? minimumCarbonMg = null,
-        Guid? sourceNodeId = null,
-        Guid? targetNodeId = null,
-        DateTimeOffset? from = null,
-        DateTimeOffset? to = null) =>
+        CancellationToken cancellationToken) =>
         Results.Ok(await service.GetPageAsync(
-            page,
-            pageSize,
-            minimumCarbonMg,
-            sourceNodeId,
-            targetNodeId,
-            from,
-            to,
+            query.Page,
+            query.PageSize,
+            query.ToFilter(),
             cancellationToken));
 
     private static async Task<IResult> GetHighEnergyAsync(

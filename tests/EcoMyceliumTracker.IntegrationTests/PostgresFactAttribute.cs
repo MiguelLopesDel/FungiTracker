@@ -10,6 +10,7 @@
 /// and CI would still pass. So on CI the missing variable is a failure, not a
 /// skip. GitHub Actions and most other providers set CI=true.
 /// </remarks>
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
 public sealed class PostgresFactAttribute : FactAttribute
 {
     internal const string ConnectionVariable = "TEST_POSTGRES_CONNECTION";

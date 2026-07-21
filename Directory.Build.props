@@ -22,6 +22,21 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <!-- The .NET analyzers judge correctness and API design, but say almost
+       nothing about whether code is understandable. These two cover what they
+       miss: cognitive and cyclomatic complexity, method and file length,
+       parameter counts, duplicated literals and dead members. -->
+  <ItemGroup>
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.19.0.132793">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Roslynator.Analyzers" Version="4.14.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
   <!-- Dependency auditing. NuGetAudit only emits warnings, so promoting the
        audit codes to errors is what actually blocks a vulnerable package. -->
   <PropertyGroup>

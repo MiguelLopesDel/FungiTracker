@@ -299,7 +299,10 @@ public sealed class ServiceTests
 
         // Zero is a valid floor and an empty interval is a valid range; only
         // negative amounts and inverted intervals are rejected.
-        var page = await service.GetPageAsync(1, 20, 0, null, null, Now, Now);
+        var page = await service.GetPageAsync(
+            1,
+            20,
+            new TransferFilter { MinimumCarbonMg = 0, From = Now, To = Now });
 
         Assert.Empty(page.Items);
     }
@@ -335,8 +338,10 @@ public sealed class ServiceTests
         var from = inverted is null ? (DateTimeOffset?)null : Now;
         var to = inverted is null ? (DateTimeOffset?)null : Now.AddDays(-1);
 
-        var error = await Assert.ThrowsAsync<DomainException>(
-            () => service.GetPageAsync(1, 20, minimumCarbonMg, null, null, from, to));
+        var error = await Assert.ThrowsAsync<DomainException>(() => service.GetPageAsync(
+            1,
+            20,
+            new TransferFilter { MinimumCarbonMg = minimumCarbonMg, From = from, To = to }));
 
         Assert.Equal(DomainErrorKind.Validation, error.Kind);
     }

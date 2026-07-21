@@ -15,32 +15,20 @@ public sealed class TransferService(
     public Task<PagedResult<TransferSummary>> GetPageAsync(
         int page,
         int pageSize,
-        int? minimumCarbonMg,
-        Guid? sourceNodeId,
-        Guid? targetNodeId,
-        DateTimeOffset? fromDate,
-        DateTimeOffset? toDate,
+        TransferFilter filter,
         CancellationToken cancellationToken = default)
     {
-        var errors = RequestValidators.ValidateTransferFilters(page, pageSize, minimumCarbonMg, fromDate, toDate);
+        var errors = RequestValidators.ValidateTransferFilters(page, pageSize, filter);
         if (errors.Count > 0)
         {
             throw DomainException.InvalidRequest(errors);
         }
 
-        return repository.GetPageAsync(
-            page,
-            pageSize,
-            minimumCarbonMg,
-            sourceNodeId,
-            targetNodeId,
-            fromDate?.ToUniversalTime(),
-            toDate?.ToUniversalTime(),
-            cancellationToken);
+        return repository.GetPageAsync(page, pageSize, filter.ToUniversalTime(), cancellationToken);
     }
 
     /// <summary>
-    /// Transfers at or above the configured threshold. The filter is inclusive.
+    /// Transfers at or above the configured threshold. The bound is inclusive.
     /// </summary>
     public Task<PagedResult<TransferSummary>> GetHighEnergyPageAsync(
         int page,
@@ -49,11 +37,7 @@ public sealed class TransferService(
         GetPageAsync(
             page,
             pageSize,
-            options.Value.HighEnergyThresholdMg,
-            null,
-            null,
-            null,
-            null,
+            new TransferFilter { MinimumCarbonMg = options.Value.HighEnergyThresholdMg },
             cancellationToken);
 
     public async Task<NutrientTransfer> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>

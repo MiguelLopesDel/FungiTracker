@@ -82,18 +82,16 @@ public static class RequestValidators
     public static Dictionary<string, string[]> ValidateTransferFilters(
         int page,
         int pageSize,
-        int? minimumCarbonMg,
-        DateTimeOffset? fromDate,
-        DateTimeOffset? toDate)
+        TransferFilter filter)
     {
         var errors = ValidatePagination(page, pageSize);
 
-        if (minimumCarbonMg < 0)
+        if (filter.MinimumCarbonMg < 0)
         {
             errors["minimumCarbonMg"] = ["O valor mínimo de carbono não pode ser negativo."];
         }
 
-        if (fromDate > toDate)
+        if (filter.From > filter.To)
         {
             errors["from"] = ["A data inicial deve ser anterior à data final."];
         }

@@ -1,4 +1,5 @@
-﻿using EcoMyceliumTracker.Models;
+﻿using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Models;
 
 namespace EcoMyceliumTracker.Repositories;
 
@@ -7,11 +8,7 @@ public interface ITransferRepository
     Task<PagedResult<TransferSummary>> GetPageAsync(
         int page,
         int pageSize,
-        int? minimumCarbonMg,
-        Guid? sourceNodeId,
-        Guid? targetNodeId,
-        DateTimeOffset? fromDate,
-        DateTimeOffset? toDate,
+        TransferFilter filter,
         CancellationToken cancellationToken = default);
 
     Task<NutrientTransfer?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
