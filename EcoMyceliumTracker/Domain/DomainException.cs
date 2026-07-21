@@ -1,6 +1,10 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace EcoMyceliumTracker.Application;
+namespace EcoMyceliumTracker.Domain;
+
+// Deliberately free of dependencies. Both the application services and the
+// repositories raise domain errors, so the type they share cannot live in
+// either one without the two namespaces referring to each other.
 
 /// <summary>
 /// How a domain rule was broken. The transport layer decides which status code

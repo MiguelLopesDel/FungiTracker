@@ -1,5 +1,6 @@
 ﻿using EcoMyceliumTracker.Application;
 using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Validation;
 
 namespace EcoMyceliumTracker.Endpoints;

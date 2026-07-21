@@ -1,6 +1,7 @@
 ﻿using EcoMyceliumTracker.Application;
 using EcoMyceliumTracker.Configuration;
 using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
 using EcoMyceliumTracker.UnitTests.Fakes;
 using Microsoft.Extensions.Options;

@@ -1,12 +1,13 @@
-﻿namespace EcoMyceliumTracker.Application;
+﻿namespace EcoMyceliumTracker.Domain;
 
 /// <summary>
 /// The criteria for narrowing a transfer listing.
 /// </summary>
 /// <remarks>
-/// Lives in Application because both the endpoint and the repository refer to
-/// it: it is shared vocabulary, not a persisted shape, so it does not belong
-/// next to the table models.
+/// Lives in Domain, which has no dependencies of its own, because both the
+/// endpoint and the repository refer to it. Application cannot host it: the
+/// services depend on the repositories, so a repository reaching back into
+/// Application would close a cycle.
 /// </remarks>
 public sealed record TransferFilter
 {

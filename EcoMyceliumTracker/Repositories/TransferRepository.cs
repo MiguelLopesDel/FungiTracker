@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Dapper;
-using EcoMyceliumTracker.Application;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
 using Npgsql;
 

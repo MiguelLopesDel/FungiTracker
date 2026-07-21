@@ -1,4 +1,4 @@
-﻿using EcoMyceliumTracker.Application;
+﻿using EcoMyceliumTracker.Domain;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
