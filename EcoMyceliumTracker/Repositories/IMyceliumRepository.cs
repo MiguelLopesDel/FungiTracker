@@ -2,7 +2,20 @@
 
 namespace EcoMyceliumTracker.Repositories;
 
-public interface IMyceliumRepository
+/// <summary>
+/// Answers only whether a network is there.
+/// </summary>
+/// <remarks>
+/// SensorService needs nothing else about a network, so it depends on this
+/// instead of the full repository, and asking is a cheaper query than
+/// fetching a row only to discard it.
+/// </remarks>
+public interface INetworkExistence
+{
+    Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
+public interface IMyceliumRepository : INetworkExistence
 {
     Task<PagedResult<MyceliumNetwork>> GetPageAsync(
         int page,

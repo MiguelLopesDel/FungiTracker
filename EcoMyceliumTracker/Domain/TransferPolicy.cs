@@ -1,4 +1,6 @@
-﻿namespace EcoMyceliumTracker.Domain;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace EcoMyceliumTracker.Domain;
 
 /// <summary>
 /// A sensor as seen while it is locked for a transfer.
@@ -15,7 +17,17 @@ public sealed record TransferSensor(Guid Id, Guid NetworkId, bool IsActive, stri
 /// </remarks>
 public static class TransferPolicy
 {
-    public static void EnsureAllowed(TransferSensor? source, TransferSensor? target)
+    /// <summary>
+    /// Throws unless the transfer is allowed.
+    /// </summary>
+    /// <remarks>
+    /// The NotNull annotations let the caller use both sensors afterwards
+    /// without asserting again: if this returns rather than throws, neither
+    /// was null.
+    /// </remarks>
+    public static void EnsureAllowed(
+        [NotNull] TransferSensor? source,
+        [NotNull] TransferSensor? target)
     {
         if (source is null || target is null)
         {

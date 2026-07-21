@@ -59,6 +59,7 @@ builder.Services.AddScoped<NetworkService>();
 builder.Services.AddScoped<SensorService>();
 builder.Services.AddScoped<TransferService>();
 builder.Services.AddScoped<IMyceliumRepository, MyceliumRepository>();
+builder.Services.AddScoped<INetworkExistence>(provider => provider.GetRequiredService<IMyceliumRepository>());
 builder.Services.AddScoped<ISensorRepository, SensorRepository>();
 builder.Services.AddScoped<ITransferRepository, TransferRepository>();
 

@@ -53,6 +53,19 @@ public sealed class MyceliumRepository(IDbSession session) : IMyceliumRepository
         return new PagedResult<MyceliumNetwork>(items, page, pageSize, total);
     }
 
+    public async Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var lease = await session.LeaseAsync(cancellationToken);
+        const string sql = "SELECT EXISTS(SELECT 1 FROM mycelium_networks WHERE id = @Id);";
+
+        return await lease.Connection.ExecuteScalarAsync<bool>(
+            new CommandDefinition(
+                sql,
+                new { Id = id },
+                transaction: lease.Transaction,
+                cancellationToken: cancellationToken));
+    }
+
     public async Task<MyceliumNetwork?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)

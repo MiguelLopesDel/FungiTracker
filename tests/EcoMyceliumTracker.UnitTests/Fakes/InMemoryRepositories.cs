@@ -33,6 +33,9 @@ public sealed class FakeNetworkRepository : IMyceliumRepository
             matches.Count));
     }
 
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.ContainsKey(id));
+
     public Task<MyceliumNetwork?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(Items.GetValueOrDefault(id));
 

@@ -91,6 +91,6 @@ public sealed class TransferService(
 
         await transaction.CommitAsync(cancellationToken);
 
-        return NutrientTransferDetails.From(created, source!, target!);
+        return NutrientTransferDetails.From(created, source, target);
     }
 }
