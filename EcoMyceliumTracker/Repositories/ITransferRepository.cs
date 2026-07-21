@@ -1,7 +1,19 @@
+﻿using EcoMyceliumTracker.Models;
+
 namespace EcoMyceliumTracker.Repositories;
 
 public interface ITransferRepository
 {
-    Task<IEnumerable<object>> GetHighEnergyTransfersAsync();
-    Task<long> CreateAsync(Guid sourceId, Guid targetId, int carbonAmount);
+    Task<PagedResult<TransferSummary>> GetPageAsync(
+        int page,
+        int pageSize,
+        int? minimumCarbonMg,
+        Guid? sourceNodeId,
+        Guid? targetNodeId,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        CancellationToken cancellationToken = default);
+
+    Task<NutrientTransfer?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
+    Task<NutrientTransfer> CreateAsync(NutrientTransfer transfer, CancellationToken cancellationToken = default);
 }

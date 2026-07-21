@@ -1,6 +1,103 @@
-@EcoMyceliumTracker_HostAddress = http://localhost:5236
+@host = http://localhost:5236
+@apiKey = local-development-api-key
+@networkId = 00000000-0000-0000-0000-000000000000
+@sensorId = 00000000-0000-0000-0000-000000000000
+@targetSensorId = 11111111-1111-1111-1111-111111111111
+@transferId = 1
 
-GET {{EcoMyceliumTracker_HostAddress}}/weatherforecast/
+GET {{host}}/health/live
 Accept: application/json
 
 ###
+
+GET {{host}}/health/ready
+Accept: application/json
+
+###
+
+GET {{host}}/api/networks?page=1&pageSize=20&scientificName=Armillaria
+Accept: application/json
+X-API-Key: {{apiKey}}
+
+###
+
+POST {{host}}/api/networks
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "scientificName": "Armillaria ostoyae",
+  "soilType": "Florestal",
+  "discoveredAt": "2026-07-20T12:00:00Z"
+}
+
+###
+
+PUT {{host}}/api/networks/{{networkId}}
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "scientificName": "Armillaria ostoyae",
+  "soilType": "Florestal úmido",
+  "discoveredAt": "2026-07-20T12:00:00Z"
+}
+
+###
+
+GET {{host}}/api/networks/{{networkId}}/sensors?page=1&pageSize=20&isActive=true
+Accept: application/json
+X-API-Key: {{apiKey}}
+
+###
+
+POST {{host}}/api/sensors
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "networkId": "{{networkId}}",
+  "location": "-23.5505,-46.6333",
+  "moistureLevel": 67.5,
+  "isActive": true
+}
+
+###
+
+PATCH {{host}}/api/sensors/{{sensorId}}/status
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "isActive": false
+}
+
+###
+
+GET {{host}}/api/transfers?page=1&pageSize=20&minimumCarbonMg=500
+Accept: application/json
+X-API-Key: {{apiKey}}
+
+###
+
+GET {{host}}/api/transfers/high-energy?page=1&pageSize=20
+Accept: application/json
+X-API-Key: {{apiKey}}
+
+###
+
+POST {{host}}/api/transfers
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "sourceNodeId": "{{sensorId}}",
+  "targetNodeId": "{{targetSensorId}}",
+  "carbonAmountMg": 750
+}
+
+###
+
+GET {{host}}/api/transfers/{{transferId}}
+Accept: application/json
+X-API-Key: {{apiKey}}

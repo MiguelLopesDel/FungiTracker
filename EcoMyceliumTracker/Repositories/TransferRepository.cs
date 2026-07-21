@@ -1,44 +1,153 @@
-using Dapper;
+﻿using Dapper;
+using EcoMyceliumTracker.Infrastructure.Errors;
+using EcoMyceliumTracker.Models;
 using Npgsql;
 
 namespace EcoMyceliumTracker.Repositories;
 
-public class TransferRepository : ITransferRepository
+public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferRepository
 {
-    private readonly string _connectionString;
-
-    public TransferRepository(IConfiguration configuration)
+    public async Task<PagedResult<TransferSummary>> GetPageAsync(
+        int page,
+        int pageSize,
+        int? minimumCarbonMg,
+        Guid? sourceNodeId,
+        Guid? targetNodeId,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        CancellationToken cancellationToken = default)
     {
-        _connectionString = configuration.GetConnectionString("PostgresConnection")!;
-    }
-
-    private NpgsqlConnection GetConnection() => new NpgsqlConnection(_connectionString);
-
-    public async Task<IEnumerable<object>> GetHighEnergyTransfersAsync()
-    {
-        using var connection = GetConnection();
-        var sql = @"
-            SELECT 
-                t.id as Id, 
-                t.carbon_amount_mg as CarbonAmountMg, 
-                t.transferred_at as TransferredAt,
-                origem.location::text as SourceLocation,
-                destino.location::text as TargetLocation
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var parameters = new
+        {
+            MinimumCarbonMg = minimumCarbonMg,
+            SourceNodeId = sourceNodeId,
+            TargetNodeId = targetNodeId,
+            From = from,
+            To = to,
+            PageSize = pageSize,
+            Offset = (page - 1) * pageSize
+        };
+        const string filters = """
+            (CAST(@MinimumCarbonMg AS integer) IS NULL OR t.carbon_amount_mg >= @MinimumCarbonMg)
+            AND (CAST(@SourceNodeId AS uuid) IS NULL OR t.source_node_id = @SourceNodeId)
+            AND (CAST(@TargetNodeId AS uuid) IS NULL OR t.target_node_id = @TargetNodeId)
+            AND (CAST(@From AS timestamptz) IS NULL OR t.transferred_at >= @From)
+            AND (CAST(@To AS timestamptz) IS NULL OR t.transferred_at <= @To)
+            """;
+        var sql = $$"""
+            SELECT t.id AS Id,
+                   t.source_node_id AS SourceNodeId,
+                   t.target_node_id AS TargetNodeId,
+                   t.carbon_amount_mg AS CarbonAmountMg,
+                   t.transferred_at AS TransferredAt,
+                   source.location::text AS SourceLocation,
+                   target.location::text AS TargetLocation
             FROM nutrient_transfers t
-            JOIN sensor_nodes origem ON t.source_node_id = origem.id
-            JOIN sensor_nodes destino ON t.target_node_id = destino.id
-            WHERE t.carbon_amount_mg > 500;";
+            JOIN sensor_nodes source ON t.source_node_id = source.id
+            JOIN sensor_nodes target ON t.target_node_id = target.id
+            WHERE {{filters}}
+            ORDER BY t.transferred_at DESC, t.id DESC
+            LIMIT @PageSize OFFSET @Offset;
 
-        return await connection.QueryAsync<object>(sql);
+            SELECT COUNT(*)
+            FROM nutrient_transfers t
+            WHERE {{filters}};
+            """;
+
+        using var grid = await connection.QueryMultipleAsync(
+            new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
+        var items = (await grid.ReadAsync<TransferSummary>()).AsList();
+        var total = await grid.ReadSingleAsync<long>();
+
+        return new PagedResult<TransferSummary>(items, page, pageSize, total);
     }
 
-    public async Task<long> CreateAsync(Guid sourceId, Guid targetId, int carbonAmount)
+    public async Task<NutrientTransfer?> GetByIdAsync(
+        long id,
+        CancellationToken cancellationToken = default)
     {
-        using var connection = GetConnection();
-        var sql = @"INSERT INTO nutrient_transfers (source_node_id, target_node_id, carbon_amount_mg) 
-                    VALUES ($1, $2, $3) 
-                    RETURNING id;";
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        const string sql = """
+            SELECT id,
+                   source_node_id AS SourceNodeId,
+                   target_node_id AS TargetNodeId,
+                   carbon_amount_mg AS CarbonAmountMg,
+                   transferred_at AS TransferredAt
+            FROM nutrient_transfers
+            WHERE id = @Id;
+            """;
 
-        return await connection.ExecuteScalarAsync<long>(sql, new { sourceId, targetId, carbonAmount });
+        return await connection.QuerySingleOrDefaultAsync<NutrientTransfer>(
+            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<NutrientTransfer> CreateAsync(
+        NutrientTransfer transfer,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        const string sensorSql = """
+            SELECT id AS Id, network_id AS NetworkId, is_active AS IsActive
+            FROM sensor_nodes
+            WHERE id = ANY(@Ids)
+            ORDER BY id
+            FOR SHARE;
+            """;
+        var states = (await connection.QueryAsync<TransferSensorState>(
+            new CommandDefinition(
+                sensorSql,
+                new { Ids = new[] { transfer.SourceNodeId, transfer.TargetNodeId } },
+                transaction,
+                cancellationToken: cancellationToken))).AsList();
+
+        var source = states.SingleOrDefault(sensor => sensor.Id == transfer.SourceNodeId);
+        var target = states.SingleOrDefault(sensor => sensor.Id == transfer.TargetNodeId);
+
+        if (source is null || target is null)
+        {
+            throw DomainException.NotFound(
+                "O sensor de origem ou de destino não existe.",
+                "transfer_sensor_not_found");
+        }
+
+        if (!source.IsActive || !target.IsActive)
+        {
+            throw DomainException.Validation(
+                "Transferências só podem envolver sensores ativos.",
+                "inactive_transfer_sensor");
+        }
+
+        if (source.NetworkId != target.NetworkId)
+        {
+            throw DomainException.Validation(
+                "Os sensores de origem e destino devem pertencer à mesma rede.",
+                "sensors_from_different_networks");
+        }
+
+        const string insertSql = """
+            INSERT INTO nutrient_transfers
+                (source_node_id, target_node_id, carbon_amount_mg, transferred_at)
+            VALUES (@SourceNodeId, @TargetNodeId, @CarbonAmountMg, @TransferredAt)
+            RETURNING id,
+                      source_node_id AS SourceNodeId,
+                      target_node_id AS TargetNodeId,
+                      carbon_amount_mg AS CarbonAmountMg,
+                      transferred_at AS TransferredAt;
+            """;
+        var created = await connection.QuerySingleAsync<NutrientTransfer>(
+            new CommandDefinition(insertSql, transfer, transaction, cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return created;
+    }
+
+    private sealed class TransferSensorState
+    {
+        public Guid Id { get; init; }
+        public Guid NetworkId { get; init; }
+        public bool IsActive { get; init; }
     }
 }
