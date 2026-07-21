@@ -74,7 +74,6 @@ public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumR
         CancellationToken cancellationToken = default)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        network.Id = Guid.NewGuid();
         var sql = $$"""
             INSERT INTO mycelium_networks (id, scientific_name, soil_type, discovered_at)
             VALUES (@Id, @ScientificName, @SoilType, @DiscoveredAt)

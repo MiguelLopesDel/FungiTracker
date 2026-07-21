@@ -17,7 +17,7 @@ public sealed class SensorService(
         bool? isActive,
         CancellationToken cancellationToken = default)
     {
-        NetworkService.EnsureValidPagination(page, pageSize);
+        Paging.EnsureValid(page, pageSize);
         await EnsureNetworkExistsAsync(networkId, cancellationToken);
 
         return await repository.GetPageByNetworkIdAsync(
@@ -46,6 +46,7 @@ public sealed class SensorService(
         return await repository.CreateAsync(
             new SensorNode
             {
+                Id = Guid.NewGuid(),
                 NetworkId = request.NetworkId,
                 Location = Validated.Required(request.Location).Trim(),
                 MoistureLevel = request.MoistureLevel,

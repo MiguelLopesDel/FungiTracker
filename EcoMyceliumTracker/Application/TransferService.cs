@@ -16,17 +16,14 @@ public sealed class TransferService(
     // async on purpose, even though it only delegates: a non-async method
     // throws when it is called rather than when it is awaited, which would
     // make this behave differently from every other service method.
-    public async Task<PagedResult<TransferView>> GetPageAsync(
+    public async Task<PagedResult<NutrientTransferDetails>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
         CancellationToken cancellationToken = default)
     {
-        var errors = RequestValidators.ValidatePagination(page, pageSize);
-        foreach (var (field, messages) in filter.Validate())
-        {
-            errors[field] = messages;
-        }
+        Paging.EnsureValid(page, pageSize);
+        var errors = filter.Validate();
 
         if (errors.Count > 0)
         {
@@ -39,7 +36,7 @@ public sealed class TransferService(
     /// <summary>
     /// Transfers at or above the configured threshold. The bound is inclusive.
     /// </summary>
-    public async Task<PagedResult<TransferView>> GetHighEnergyPageAsync(
+    public async Task<PagedResult<NutrientTransferDetails>> GetHighEnergyPageAsync(
         int page,
         int pageSize,
         CancellationToken cancellationToken = default) =>
@@ -49,13 +46,13 @@ public sealed class TransferService(
             new TransferFilter { MinimumCarbonMg = options.Value.HighEnergyThresholdMg },
             cancellationToken);
 
-    public async Task<TransferView> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
+    public async Task<NutrientTransferDetails> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
         await repository.GetByIdAsync(id, cancellationToken)
             ?? throw DomainException.NotFound(
                 "A transferência informada não existe.",
                 "transfer_not_found");
 
-    public async Task<TransferView> CreateAsync(
+    public async Task<NutrientTransferDetails> CreateAsync(
         CreateNutrientTransferRequest request,
         CancellationToken cancellationToken = default)
     {

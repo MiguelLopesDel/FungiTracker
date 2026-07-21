@@ -40,7 +40,6 @@ public sealed class FakeNetworkRepository : IMyceliumRepository
         MyceliumNetwork network,
         CancellationToken cancellationToken = default)
     {
-        network.Id = Guid.NewGuid();
         Items[network.Id] = network;
         return Task.FromResult(network);
     }
@@ -88,7 +87,6 @@ public sealed class FakeSensorRepository : ISensorRepository
 
     public Task<SensorNode> CreateAsync(SensorNode sensor, CancellationToken cancellationToken = default)
     {
-        sensor.Id = Guid.NewGuid();
         Items[sensor.Id] = sensor;
         return Task.FromResult(sensor);
     }
@@ -132,7 +130,7 @@ public sealed class FakeTransferRepository : ITransferRepository
 
     public int? LastMinimumCarbonMg { get; private set; }
 
-    public Task<PagedResult<TransferView>> GetPageAsync(
+    public Task<PagedResult<NutrientTransferDetails>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
@@ -145,13 +143,13 @@ public sealed class FakeTransferRepository : ITransferRepository
             .Select(ToView)
             .ToList();
 
-        return Task.FromResult(new PagedResult<TransferView>(matches, page, pageSize, matches.Count));
+        return Task.FromResult(new PagedResult<NutrientTransferDetails>(matches, page, pageSize, matches.Count));
     }
 
-    public Task<TransferView?> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
+    public Task<NutrientTransferDetails?> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
         Task.FromResult(Items.FirstOrDefault(item => item.Id == id) is { } found ? ToView(found) : null);
 
-    public Task<TransferView> CreateAsync(
+    public Task<NutrientTransferDetails> CreateAsync(
         NutrientTransfer transfer,
         CancellationToken cancellationToken = default)
     {
@@ -160,7 +158,7 @@ public sealed class FakeTransferRepository : ITransferRepository
         return Task.FromResult(ToView(transfer));
     }
 
-    private static TransferView ToView(NutrientTransfer item) => new()
+    private static NutrientTransferDetails ToView(NutrientTransfer item) => new()
     {
         Id = item.Id,
         SourceNodeId = item.SourceNodeId,

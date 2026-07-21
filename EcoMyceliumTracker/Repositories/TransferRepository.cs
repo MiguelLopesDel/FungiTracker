@@ -18,7 +18,7 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
         target.location::text AS TargetLocation
         """;
 
-    public async Task<PagedResult<TransferView>> GetPageAsync(
+    public async Task<PagedResult<NutrientTransferDetails>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
@@ -60,13 +60,13 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
 
         await using var grid = await connection.QueryMultipleAsync(
             new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
-        var items = (await grid.ReadAsync<TransferView>()).AsList();
+        var items = (await grid.ReadAsync<NutrientTransferDetails>()).AsList();
         var total = await grid.ReadSingleAsync<long>();
 
-        return new PagedResult<TransferView>(items, page, pageSize, total);
+        return new PagedResult<NutrientTransferDetails>(items, page, pageSize, total);
     }
 
-    public async Task<TransferView?> GetByIdAsync(
+    public async Task<NutrientTransferDetails?> GetByIdAsync(
         long id,
         CancellationToken cancellationToken = default)
     {
@@ -79,11 +79,11 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             WHERE t.id = @Id;
             """;
 
-        return await connection.QuerySingleOrDefaultAsync<TransferView>(
+        return await connection.QuerySingleOrDefaultAsync<NutrientTransferDetails>(
             new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<TransferView> CreateAsync(
+    public async Task<NutrientTransferDetails> CreateAsync(
         NutrientTransfer transfer,
         CancellationToken cancellationToken = default)
     {
@@ -148,7 +148,7 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
 
         await transaction.CommitAsync(cancellationToken);
 
-        return new TransferView
+        return new NutrientTransferDetails
         {
             Id = created.Id,
             SourceNodeId = created.SourceNodeId,

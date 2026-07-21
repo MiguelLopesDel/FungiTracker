@@ -1,11 +1,11 @@
 ﻿namespace EcoMyceliumTracker.Models;
 
 /// <summary>
-/// How a transfer is represented in responses: the stored row plus the two
-/// sensor locations. The same shape is used by the listing and by the single
-/// transfer endpoints, so a client never has to handle two variants.
+/// A stored transfer plus the location of each sensor, which is how every
+/// transfer endpoint represents one. Named after NutrientTransfer, the row it
+/// reads from, so the pair is recognisable as write model and read model.
 /// </summary>
-public sealed class TransferView
+public sealed class NutrientTransferDetails
 {
     public long Id { get; set; }
     public Guid SourceNodeId { get; set; }

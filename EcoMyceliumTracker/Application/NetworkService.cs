@@ -17,7 +17,7 @@ public sealed class NetworkService(
         string? soilType,
         CancellationToken cancellationToken = default)
     {
-        EnsureValidPagination(page, pageSize);
+        Paging.EnsureValid(page, pageSize);
 
         return await repository.GetPageAsync(page, pageSize, scientificName, soilType, cancellationToken);
     }
@@ -71,15 +71,6 @@ public sealed class NetworkService(
         }
     }
 
-    internal static void EnsureValidPagination(int page, int pageSize)
-    {
-        var errors = RequestValidators.ValidatePagination(page, pageSize);
-        if (errors.Count > 0)
-        {
-            throw DomainException.InvalidRequest(errors);
-        }
-    }
-
     internal static DomainException NetworkNotFound() =>
         DomainException.NotFound("A rede informada não existe.", "network_not_found");
 
@@ -89,6 +80,9 @@ public sealed class NetworkService(
         DateTimeOffset discoveredAt) =>
         new()
         {
+            // The caller decides identity; a repository should persist what it
+            // is given, not alter it.
+            Id = Guid.NewGuid(),
             ScientificName = scientificName.Trim(),
             SoilType = soilType.Trim(),
             DiscoveredAt = discoveredAt.ToUniversalTime(),

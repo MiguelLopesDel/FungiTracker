@@ -1,6 +1,11 @@
 ﻿using System.Globalization;
 
-namespace EcoMyceliumTracker.Validation;
+namespace EcoMyceliumTracker.Domain;
+
+// A point is stored as PostgreSQL text and arrives from callers as "x,y", so
+// converting between the two is domain vocabulary rather than validation:
+// the repository needs it to write, and the validator only borrows it to
+// decide whether an input is well formed.
 
 public readonly record struct Coordinates(double X, double Y);
 

@@ -1,6 +1,6 @@
 ﻿using Dapper;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
-using EcoMyceliumTracker.Validation;
 using Npgsql;
 
 namespace EcoMyceliumTracker.Repositories;
@@ -76,7 +76,6 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
         var coordinates = ParseLocation(sensor.Location);
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        sensor.Id = Guid.NewGuid();
         var sql = $$"""
             INSERT INTO sensor_nodes (id, network_id, location, moisture_level, is_active)
             VALUES (@Id, @NetworkId, point(@X, @Y), @MoistureLevel, @IsActive)

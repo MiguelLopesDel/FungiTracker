@@ -105,7 +105,7 @@ public sealed class ServiceTests
     {
         var sensors = new FakeSensorRepository();
         var networks = new FakeNetworkRepository();
-        var network = await networks.CreateAsync(new MyceliumNetwork());
+        var network = await networks.CreateAsync(new MyceliumNetwork { Id = Guid.NewGuid() });
         var service = new SensorService(sensors, networks);
 
         var error = await Assert.ThrowsAsync<DomainException>(() => service.CreateAsync(
@@ -143,7 +143,7 @@ public sealed class ServiceTests
     {
         var sensors = new FakeSensorRepository();
         var networks = new FakeNetworkRepository();
-        var network = await networks.CreateAsync(new MyceliumNetwork());
+        var network = await networks.CreateAsync(new MyceliumNetwork { Id = Guid.NewGuid() });
         var service = new SensorService(sensors, networks);
 
         var created = await service.CreateAsync(
@@ -182,7 +182,7 @@ public sealed class ServiceTests
     public async Task UpdateSensor_AppliesTheNewValues()
     {
         var sensors = new FakeSensorRepository();
-        var stored = await sensors.CreateAsync(new SensorNode { Location = "1,2", MoistureLevel = 10 });
+        var stored = await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), Location = "1,2", MoistureLevel = 10 });
         var service = new SensorService(sensors, new FakeNetworkRepository());
 
         var updated = await service.UpdateAsync(
@@ -221,7 +221,7 @@ public sealed class ServiceTests
     public async Task GetSensor_WhenPresent_IsReturned()
     {
         var sensors = new FakeSensorRepository();
-        var stored = await sensors.CreateAsync(new SensorNode { Location = "1,2" });
+        var stored = await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), Location = "1,2" });
         var service = new SensorService(sensors, new FakeNetworkRepository());
 
         Assert.Equal(stored.Id, (await service.GetByIdAsync(stored.Id)).Id);
@@ -232,9 +232,9 @@ public sealed class ServiceTests
     {
         var sensors = new FakeSensorRepository();
         var networks = new FakeNetworkRepository();
-        var network = await networks.CreateAsync(new MyceliumNetwork());
-        await sensors.CreateAsync(new SensorNode { NetworkId = network.Id, IsActive = true });
-        await sensors.CreateAsync(new SensorNode { NetworkId = network.Id, IsActive = false });
+        var network = await networks.CreateAsync(new MyceliumNetwork { Id = Guid.NewGuid() });
+        await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), NetworkId = network.Id, IsActive = true });
+        await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), NetworkId = network.Id, IsActive = false });
         var service = new SensorService(sensors, networks);
 
         var page = await service.GetPageByNetworkIdAsync(network.Id, 1, 20, isActive: true);
@@ -259,7 +259,7 @@ public sealed class ServiceTests
     public async Task ListNetworks_WithValidPagination_ReachesTheRepository()
     {
         var repository = new FakeNetworkRepository();
-        await repository.CreateAsync(new MyceliumNetwork { ScientificName = "Armillaria" });
+        await repository.CreateAsync(new MyceliumNetwork { Id = Guid.NewGuid(), ScientificName = "Armillaria" });
         var service = new NetworkService(repository, Clock());
 
         var page = await service.GetPageAsync(1, 20, "armi", null);

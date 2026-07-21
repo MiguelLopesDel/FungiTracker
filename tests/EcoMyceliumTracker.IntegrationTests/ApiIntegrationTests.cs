@@ -182,7 +182,7 @@ public sealed class ApiIntegrationTests
             new CreateNutrientTransferRequest(source.Id, target.Id, 100));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var created = await response.Content.ReadFromJsonAsync<TransferView>();
+        var created = await response.Content.ReadFromJsonAsync<NutrientTransferDetails>();
         Assert.NotNull(created);
         Assert.InRange(created.TransferredAt, before, DateTimeOffset.UtcNow.AddSeconds(5));
     }
@@ -202,7 +202,7 @@ public sealed class ApiIntegrationTests
         var atThreshold = await CreateTransferAsync(client, source.Id, target.Id, 500);
         var belowThreshold = await CreateTransferAsync(client, source.Id, target.Id, 499);
 
-        var page = await client.GetFromJsonAsync<PagedResult<TransferView>>(
+        var page = await client.GetFromJsonAsync<PagedResult<NutrientTransferDetails>>(
             "/api/transfers/high-energy?pageSize=100");
         Assert.NotNull(page);
 
@@ -378,12 +378,12 @@ public sealed class ApiIntegrationTests
         Assert.Equal("(10,20)", created.SourceLocation);
         Assert.Equal("(30,40)", created.TargetLocation);
 
-        var detail = await client.GetFromJsonAsync<TransferView>($"/api/transfers/{created.Id}");
+        var detail = await client.GetFromJsonAsync<NutrientTransferDetails>($"/api/transfers/{created.Id}");
         Assert.NotNull(detail);
         Assert.Equal(created.SourceLocation, detail.SourceLocation);
         Assert.Equal(created.TargetLocation, detail.TargetLocation);
 
-        var page = await client.GetFromJsonAsync<PagedResult<TransferView>>(
+        var page = await client.GetFromJsonAsync<PagedResult<NutrientTransferDetails>>(
             $"/api/transfers?sourceNodeId={source.Id}");
         Assert.NotNull(page);
         var listed = Assert.Single(page.Items);
@@ -436,7 +436,7 @@ public sealed class ApiIntegrationTests
         return client;
     }
 
-    private static async Task<TransferView> CreateTransferAsync(
+    private static async Task<NutrientTransferDetails> CreateTransferAsync(
         HttpClient client,
         Guid sourceId,
         Guid targetId,
@@ -446,7 +446,7 @@ public sealed class ApiIntegrationTests
             "/api/transfers",
             new CreateNutrientTransferRequest(sourceId, targetId, carbonAmountMg));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<TransferView>())!;
+        return (await response.Content.ReadFromJsonAsync<NutrientTransferDetails>())!;
     }
 
     private static async Task<SensorNode> CreateSensorAsync(
