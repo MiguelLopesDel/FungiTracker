@@ -1,18 +1,14 @@
-﻿using System.Globalization;
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using EcoMyceliumTracker.Contracts;
 using EcoMyceliumTracker.Models;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 
 namespace EcoMyceliumTracker.IntegrationTests;
 
 public sealed class ApiIntegrationTests
 {
-    private const string ApiKey = "integration-test-api-key";
+    private const string ApiKey = ApiFactory.ApiKey;
 
     [PostgresFact]
     public async Task ApiWorkflow_EnforcesAuthenticationPaginationAndTransferRules()
@@ -477,24 +473,4 @@ public sealed class ApiIntegrationTests
         return (await response.Content.ReadFromJsonAsync<MyceliumNetwork>())!;
     }
 
-    private sealed class ApiFactory(
-        string connectionString,
-        int permitLimit = 1000) : WebApplicationFactory<Program>
-    {
-        protected override void ConfigureWebHost(IWebHostBuilder builder)
-        {
-            builder.UseEnvironment("Testing");
-            builder.ConfigureAppConfiguration((_, configuration) =>
-            {
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:PostgresConnection"] = connectionString,
-                    ["Authentication:ApiKey"] = ApiKey,
-                    ["Cors:AllowedOrigins:0"] = "http://localhost:3000",
-                    ["Database:RunMigrations"] = "true",
-                    ["RateLimit:PermitLimit"] = permitLimit.ToString(CultureInfo.InvariantCulture)
-                });
-            });
-        }
-    }
 }
