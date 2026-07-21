@@ -28,6 +28,11 @@ public sealed class CoordinatesParserTests
     [InlineData("10.5;20.5")]
     [InlineData("NaN,10")]
     [InlineData("Infinity,10")]
+    // Parentheses are only stripped as a matched pair; a lone one is not a
+    // delimiter and must not be trimmed off the number.
+    [InlineData("(10,20")]
+    [InlineData("10,20)")]
+    [InlineData("()")]
     public void TryParse_WithInvalidLocation_ReturnsFalse(string? location)
     {
         Assert.False(CoordinatesParser.TryParse(location, out _));

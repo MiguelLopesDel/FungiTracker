@@ -10,5 +10,6 @@ riderModule.iml
 *.user
 *.suo
 TestResults/
+StrykerOutput/
 coverage*.xml
 *.trx

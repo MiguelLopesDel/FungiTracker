@@ -50,7 +50,27 @@ jobs:
         run: dotnet build EcoMyceliumTracker.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test EcoMyceliumTracker.sln --configuration Release --no-build --collect:"XPlat Code Coverage"
+        run: >-
+          dotnet test EcoMyceliumTracker.sln
+          --configuration Release
+          --no-build
+          --settings coverlet.runsettings
+          --results-directory TestResults
 
-      - name: Audit dependencies
-        run: dotnet list EcoMyceliumTracker/EcoMyceliumTracker.csproj package --vulnerable --include-transitive
+      - name: Check coverage
+        run: python3 scripts/check-coverage.py --results TestResults --threshold 65
+
+      # NuGetAudit already fails the Restore step on a vulnerable package,
+      # because Directory.Build.props promotes NU1901-NU1904 to errors. This
+      # step only prints the detail, since `dotnet list package` always exits 0.
+      - name: Report dependency audit
+        if: always()
+        run: dotnet list EcoMyceliumTracker.sln package --vulnerable --include-transitive
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: TestResults/**/coverage.cobertura.xml
+          if-no-files-found: error

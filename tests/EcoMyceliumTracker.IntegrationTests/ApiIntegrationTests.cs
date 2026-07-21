@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Globalization;
+using System.Net;
 using System.Net.Http.Json;
 using EcoMyceliumTracker.Contracts;
 using EcoMyceliumTracker.Models;
@@ -159,7 +160,7 @@ public sealed class ApiIntegrationTests
                     ["Authentication:ApiKey"] = ApiKey,
                     ["Cors:AllowedOrigins:0"] = "http://localhost:3000",
                     ["Database:RunMigrations"] = "true",
-                    ["RateLimit:PermitLimit"] = permitLimit.ToString()
+                    ["RateLimit:PermitLimit"] = permitLimit.ToString(CultureInfo.InvariantCulture)
                 });
             });
         }

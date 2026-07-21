@@ -52,6 +52,65 @@ public sealed class RequestValidatorsTests
         Assert.NotEmpty(RequestValidators.ValidatePagination(page, pageSize));
     }
 
+    // The boundaries below are the values where an off-by-one in a comparison
+    // would flip the outcome, so each one pins down a single limit.
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(100)]
+    public void ValidateSensor_WithMoistureAtRangeLimits_ReturnsNoError(decimal moistureLevel)
+    {
+        var request = new CreateSensorNodeRequest(Guid.NewGuid(), "10,20", moistureLevel, true);
+
+        Assert.DoesNotContain("moistureLevel", RequestValidators.Validate(request).Keys);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(RequestValidators.MaximumPageSize)]
+    public void ValidatePagination_WithPageSizeAtLimits_ReturnsNoErrors(int pageSize)
+    {
+        Assert.Empty(RequestValidators.ValidatePagination(1, pageSize));
+    }
+
+    [Fact]
+    public void ValidateNetwork_WithNamesAtMaximumLength_ReturnsNoErrors()
+    {
+        var request = new CreateMyceliumNetworkRequest(
+            new string('a', 200),
+            new string('b', 100),
+            DateTimeOffset.UtcNow);
+
+        Assert.Empty(RequestValidators.Validate(request));
+    }
+
+    [Fact]
+    public void ValidateNetwork_WithNamesOverMaximumLength_ReturnsErrors()
+    {
+        var request = new CreateMyceliumNetworkRequest(
+            new string('a', 201),
+            new string('b', 101),
+            DateTimeOffset.UtcNow);
+
+        var errors = RequestValidators.Validate(request);
+
+        Assert.Contains("scientificName", errors.Keys);
+        Assert.Contains("soilType", errors.Keys);
+    }
+
+    [Fact]
+    public void ValidateTransfer_WithTimestampExactlyNow_ReturnsNoError()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var request = new CreateNutrientTransferRequest(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            10,
+            now);
+
+        Assert.DoesNotContain(nameof(request.TransferredAt), RequestValidators.Validate(request, now).Keys);
+    }
+
     [Fact]
     public void Validate_WithValidRequests_ReturnsNoErrors()
     {

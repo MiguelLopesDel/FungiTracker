@@ -1,0 +1,45 @@
+name: Mutation testing
+
+# Mutation testing is slower than the main pipeline and answers a different
+# question — whether the tests would notice a change in behaviour — so it runs
+# on demand and weekly instead of blocking every pull request.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  stryker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Restore
+        run: dotnet restore EcoMyceliumTracker.sln --locked-mode
+
+      # Fails when the mutation score falls under the "break" threshold in
+      # stryker-config.json.
+      - name: Run Stryker
+        run: dotnet stryker
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: StrykerOutput/**/reports/*.html
+          if-no-files-found: warn
