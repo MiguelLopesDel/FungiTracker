@@ -107,17 +107,17 @@ public sealed partial class ApiExceptionHandler(
                     "An unexpected error occurred while processing the request.", "unexpected_error")
         };
 
+    // Conflicts are not a domain kind: they are raised by the database when a
+    // constraint rejects a write, and handled by the PostgresException cases.
     private static int MapKind(DomainErrorKind kind) => kind switch
     {
         DomainErrorKind.NotFound => StatusCodes.Status404NotFound,
-        DomainErrorKind.Conflict => StatusCodes.Status409Conflict,
         _ => StatusCodes.Status422UnprocessableEntity,
     };
 
     private static string TitleFor(DomainErrorKind kind) => kind switch
     {
         DomainErrorKind.NotFound => "Resource not found",
-        DomainErrorKind.Conflict => "Resource conflict",
         _ => "Business rule violation",
     };
 }

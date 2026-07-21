@@ -103,6 +103,8 @@ Exemplos executáveis estão em [EcoMyceliumTracker.http](EcoMyceliumTracker/Eco
 | `Cors__AllowedOrigins__0` | Primeira origem web permitida | nenhuma |
 | `RateLimit__PermitLimit` | Requisições permitidas por janela | `100` |
 | `RateLimit__WindowSeconds` | Duração da janela | `60` |
+| `RateLimit__QueueLimit` | Requisições que aguardam na fila em vez de receber 429 | `0` |
+| `Database__RunMigrations` | Executa as migrations no startup. Desligue apenas quando o schema for aplicado por fora; com `false` a aplicação sobe contra um banco possivelmente desatualizado | `true` |
 | `Transfers__HighEnergyThresholdMg` | Limite de alta energia | `500` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Endpoint do collector OpenTelemetry | desabilitado |
 
@@ -117,7 +119,7 @@ dotnet test EcoMyceliumTracker.sln --settings coverlet.runsettings --results-dir
 python3 scripts/check-coverage.py --results TestResults --threshold 85
 ```
 
-Os testes de integração usam a variável `TEST_POSTGRES_CONNECTION`. Quando ela não está definida, eles são marcados como ignorados; a CI fornece automaticamente um PostgreSQL dedicado e executa todo o cenário HTTP.
+Os testes de integração usam a variável `TEST_POSTGRES_CONNECTION`. Sem ela, são ignorados — para que `dotnet test` funcione numa máquina sem banco. **Mas quando `CI=true`, a variável ausente faz os testes falharem em vez de pular**: um teste ignorado é invisível num pipeline verde, então uma secret renomeada poderia desligar a suíte de integração inteira sem ninguém perceber. A CI fornece um PostgreSQL dedicado e executa todo o cenário HTTP.
 
 ### Gates
 

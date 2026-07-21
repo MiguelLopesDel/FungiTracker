@@ -1,3 +1,8 @@
+-- The column widths and CHECK constraints below mirror the constants in
+-- Validation/RequestValidators.cs. They are a backstop, not the primary rule:
+-- if one side changes without the other, valid input starts being rejected as
+-- a constraint violation instead of a validation error.
+
 CREATE TABLE IF NOT EXISTS mycelium_networks (
     id UUID PRIMARY KEY,
     scientific_name VARCHAR(200) NOT NULL,

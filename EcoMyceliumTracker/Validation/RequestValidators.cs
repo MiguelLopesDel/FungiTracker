@@ -5,6 +5,16 @@ namespace EcoMyceliumTracker.Validation;
 public static class RequestValidators
 {
     public const int MaximumPageSize = 100;
+    public const int DefaultPageSize = 20;
+
+    // These bounds are also enforced by the database. Any change here has to be
+    // matched by a migration, otherwise the same input starts failing as a
+    // constraint violation (422) instead of a validation error (400).
+    // See Infrastructure/Persistence/Migrations/001_initial_schema.sql.
+    public const int MaximumScientificNameLength = 200;
+    public const int MaximumSoilTypeLength = 100;
+    public const decimal MinimumMoistureLevel = 0;
+    public const decimal MaximumMoistureLevel = 100;
 
     public static Dictionary<string, string[]> Validate(
         CreateMyceliumNetworkRequest request,
@@ -120,18 +130,18 @@ public static class RequestValidators
         {
             errors[nameof(scientificName)] = ["O nome científico é obrigatório."];
         }
-        else if (scientificName.Length > 200)
+        else if (scientificName.Length > MaximumScientificNameLength)
         {
-            errors[nameof(scientificName)] = ["O nome científico deve ter no máximo 200 caracteres."];
+            errors[nameof(scientificName)] = [$"O nome científico deve ter no máximo {MaximumScientificNameLength} caracteres."];
         }
 
         if (string.IsNullOrWhiteSpace(soilType))
         {
             errors[nameof(soilType)] = ["O tipo de solo é obrigatório."];
         }
-        else if (soilType.Length > 100)
+        else if (soilType.Length > MaximumSoilTypeLength)
         {
-            errors[nameof(soilType)] = ["O tipo de solo deve ter no máximo 100 caracteres."];
+            errors[nameof(soilType)] = [$"O tipo de solo deve ter no máximo {MaximumSoilTypeLength} caracteres."];
         }
 
         if (discoveredAt == default)
@@ -155,9 +165,9 @@ public static class RequestValidators
             errors[nameof(location)] = ["A localização deve usar o formato 'x,y', com ponto como separador decimal."];
         }
 
-        if (moistureLevel is < 0 or > 100)
+        if (moistureLevel < MinimumMoistureLevel || moistureLevel > MaximumMoistureLevel)
         {
-            errors[nameof(moistureLevel)] = ["O nível de umidade deve estar entre 0 e 100."];
+            errors[nameof(moistureLevel)] = [$"O nível de umidade deve estar entre {MinimumMoistureLevel} e {MaximumMoistureLevel}."];
         }
 
         return errors;

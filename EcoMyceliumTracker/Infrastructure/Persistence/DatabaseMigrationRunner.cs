@@ -8,6 +8,9 @@ public sealed partial class DatabaseMigrationRunner(
     NpgsqlDataSource dataSource,
     ILogger<DatabaseMigrationRunner> logger)
 {
+    // Arbitrary but fixed: every instance must pick the same advisory lock id
+    // so that only one of them applies migrations at startup. The value itself
+    // has no meaning and only has to stay stable.
     private const long MigrationLockId = 4_243_691_742;
 
     [LoggerMessage(

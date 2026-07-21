@@ -17,7 +17,7 @@ public sealed class ApiIntegrationTests
     [PostgresFact]
     public async Task ApiWorkflow_EnforcesAuthenticationPaginationAndTransferRules()
     {
-        var connectionString = Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION")!;
+        var connectionString = PostgresFactAttribute.RequiredConnectionString();
 
         await using var factory = new ApiFactory(connectionString);
         using var client = factory.CreateClient();
@@ -113,7 +113,7 @@ public sealed class ApiIntegrationTests
     [PostgresFact]
     public async Task Listing_WithPageNumberNearIntMaxValue_DoesNotOverflowTheOffset()
     {
-        var connectionString = Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION")!;
+        var connectionString = PostgresFactAttribute.RequiredConnectionString();
 
         await using var factory = new ApiFactory(connectionString);
         using var client = factory.CreateClient();
@@ -131,7 +131,7 @@ public sealed class ApiIntegrationTests
     [PostgresFact]
     public async Task NetworkFilter_TreatsLikeWildcardsAsLiteralCharacters()
     {
-        var connectionString = Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION")!;
+        var connectionString = PostgresFactAttribute.RequiredConnectionString();
 
         await using var factory = new ApiFactory(connectionString);
         using var client = factory.CreateClient();
@@ -347,9 +347,29 @@ public sealed class ApiIntegrationTests
     }
 
     [PostgresFact]
+    public async Task SensorLocation_RoundTripsThroughThePostgresPointFormat()
+    {
+        using var client = CreateAuthenticatedClient(out var factory);
+        await using var _ = factory;
+
+        var network = await CreateNetworkAsync(client, $"Point-{Guid.NewGuid():N}");
+
+        // A point column is read back as "(x,y)", which is not the "x,y" the
+        // caller sent. The parser has to keep accepting both, otherwise an
+        // update built from a previous GET would start being rejected.
+        var created = await CreateSensorAsync(client, network.Id, "10.5,20.25");
+        Assert.Equal("(10.5,20.25)", created.Location);
+
+        var updated = await client.PutAsJsonAsync(
+            $"/api/sensors/{created.Id}",
+            new UpdateSensorNodeRequest(created.Location, 50, true));
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+    }
+
+    [PostgresFact]
     public async Task ApiRateLimit_IsAppliedPerClient()
     {
-        var connectionString = Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION")!;
+        var connectionString = PostgresFactAttribute.RequiredConnectionString();
         await using var factory = new ApiFactory(connectionString, permitLimit: 1);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
@@ -360,7 +380,7 @@ public sealed class ApiIntegrationTests
 
     private static HttpClient CreateAuthenticatedClient(out ApiFactory factory)
     {
-        var connectionString = Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION")!;
+        var connectionString = PostgresFactAttribute.RequiredConnectionString();
         factory = new ApiFactory(connectionString);
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);

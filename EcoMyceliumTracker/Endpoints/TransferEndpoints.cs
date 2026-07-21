@@ -1,5 +1,6 @@
 ﻿using EcoMyceliumTracker.Application;
 using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Validation;
 
 namespace EcoMyceliumTracker.Endpoints;
 
@@ -21,7 +22,7 @@ public static class TransferEndpoints
         TransferService service,
         CancellationToken cancellationToken,
         int page = 1,
-        int pageSize = 20,
+        int pageSize = RequestValidators.DefaultPageSize,
         int? minimumCarbonMg = null,
         Guid? sourceNodeId = null,
         Guid? targetNodeId = null,
@@ -41,7 +42,7 @@ public static class TransferEndpoints
         TransferService service,
         CancellationToken cancellationToken,
         int page = 1,
-        int pageSize = 20) =>
+        int pageSize = RequestValidators.DefaultPageSize) =>
         Results.Ok(await service.GetHighEnergyPageAsync(page, pageSize, cancellationToken));
 
     private static async Task<IResult> GetByIdAsync(

@@ -10,7 +10,6 @@ public enum DomainErrorKind
 {
     Validation,
     NotFound,
-    Conflict,
 }
 
 [SuppressMessage(
@@ -41,7 +40,4 @@ public sealed class DomainException(
 
     public static DomainException NotFound(string message, string code = "resource_not_found") =>
         new(message, DomainErrorKind.NotFound, code);
-
-    public static DomainException Conflict(string message, string code = "conflict") =>
-        new(message, DomainErrorKind.Conflict, code);
 }

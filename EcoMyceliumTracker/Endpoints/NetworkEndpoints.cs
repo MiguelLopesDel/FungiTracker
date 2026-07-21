@@ -1,5 +1,6 @@
 ﻿using EcoMyceliumTracker.Application;
 using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Validation;
 
 namespace EcoMyceliumTracker.Endpoints;
 
@@ -22,7 +23,7 @@ public static class NetworkEndpoints
         NetworkService service,
         CancellationToken cancellationToken,
         int page = 1,
-        int pageSize = 20,
+        int pageSize = RequestValidators.DefaultPageSize,
         string? scientificName = null,
         string? soilType = null) =>
         Results.Ok(await service.GetPageAsync(page, pageSize, scientificName, soilType, cancellationToken));
