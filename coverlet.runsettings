@@ -8,7 +8,11 @@
           <!-- Source generator output is not hand-written code, so counting it
                would distort the number the threshold is checked against. -->
           <ExcludeByFile>**/obj/**/*.g.cs</ExcludeByFile>
-          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+          <!-- Only ExcludeFromCodeCoverage is listed here. Excluding
+               GeneratedCode or CompilerGenerated silently empties the whole
+               report for this project instead of trimming it, which made the
+               gate measure the integration tests alone. -->
+          <ExcludeByAttribute>ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SkipAutoProps>true</SkipAutoProps>
         </Configuration>
       </DataCollector>

@@ -129,7 +129,7 @@ Os testes de integração usam a variável `TEST_POSTGRES_CONNECTION`. Quando el
 | Cobertura | `scripts/check-coverage.py` | cobertura de linha abaixo de 85% |
 | Mutação | `dotnet stryker` | score abaixo de 70% |
 
-O piso de cobertura é 85% porque a cobertura atual é 88,2%: ele existe para impedir regressão, não como meta. O mesmo vale para o piso de mutação.
+O piso de cobertura é 85% porque a cobertura atual é 89,8%: ele existe para impedir regressão, não como meta. O mesmo vale para o piso de mutação.
 
 As regras de analisador desligadas estão no fim do `.editorconfig`, cada uma com o motivo. A regra é: só se desliga o que não se aplica a uma aplicação ASP.NET Core — o que aponta defeito real se corrige no código.
 
