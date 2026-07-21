@@ -1,4 +1,5 @@
-﻿using Dapper;
+﻿using System.Diagnostics.CodeAnalysis;
+using Dapper;
 using EcoMyceliumTracker.Infrastructure.Errors;
 using EcoMyceliumTracker.Models;
 using Npgsql;
@@ -13,8 +14,8 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
         int? minimumCarbonMg,
         Guid? sourceNodeId,
         Guid? targetNodeId,
-        DateTimeOffset? from,
-        DateTimeOffset? to,
+        DateTimeOffset? fromDate,
+        DateTimeOffset? toDate,
         CancellationToken cancellationToken = default)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -23,8 +24,8 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             MinimumCarbonMg = minimumCarbonMg,
             SourceNodeId = sourceNodeId,
             TargetNodeId = targetNodeId,
-            From = from,
-            To = to,
+            From = fromDate,
+            To = toDate,
             PageSize = pageSize,
             Offset = (page - 1) * pageSize
         };
@@ -144,6 +145,10 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
         return created;
     }
 
+    [SuppressMessage(
+        "Performance",
+        "CA1812:Avoid uninstantiated internal classes",
+        Justification = "Dapper materializes this type by reflection.")]
     private sealed class TransferSensorState
     {
         public Guid Id { get; init; }

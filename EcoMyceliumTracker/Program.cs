@@ -10,7 +10,6 @@ using EcoMyceliumTracker.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 using Npgsql;
 using OpenTelemetry;
@@ -202,7 +201,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 app.MapApi();
 
-app.Run();
+await app.RunAsync();
 
 public partial class Program
 {

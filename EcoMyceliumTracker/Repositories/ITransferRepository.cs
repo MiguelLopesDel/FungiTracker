@@ -10,8 +10,8 @@ public interface ITransferRepository
         int? minimumCarbonMg,
         Guid? sourceNodeId,
         Guid? targetNodeId,
-        DateTimeOffset? from,
-        DateTimeOffset? to,
+        DateTimeOffset? fromDate,
+        DateTimeOffset? toDate,
         CancellationToken cancellationToken = default);
 
     Task<NutrientTransfer?> GetByIdAsync(long id, CancellationToken cancellationToken = default);

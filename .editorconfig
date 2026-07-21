@@ -16,3 +16,47 @@ charset = utf-8
 indent_style = space
 indent_size = 2
 trim_trailing_whitespace = true
+
+# --------------------------------------------------------------------------
+# Analyzer configuration
+#
+# The build runs with AnalysisMode=All and TreatWarningsAsErrors, so every rule
+# is on unless it is switched off right here, with a reason. Rules are only
+# disabled when they do not apply to an ASP.NET Core application; anything that
+# pointed at a real defect was fixed in the code instead.
+# --------------------------------------------------------------------------
+[*.cs]
+
+# ASP.NET Core has no synchronization context, so ConfigureAwait(false) adds
+# hundreds of call-site annotations and buys nothing. It is guidance for
+# libraries, not for applications.
+dotnet_diagnostic.CA2007.severity = none
+
+# Endpoint, contract and model types are bound and serialized by the framework
+# and referenced from the test project, so they stay public on purpose.
+dotnet_diagnostic.CA1515.severity = none
+
+# Nullable reference types are enabled solution-wide and the framework never
+# hands these methods a null argument, so the null guards would be dead code.
+dotnet_diagnostic.CA1062.severity = none
+
+# Style rules that the formatter can enforce mechanically.
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0011.severity = warning
+dotnet_diagnostic.IDE0055.severity = warning
+dotnet_diagnostic.IDE0161.severity = warning
+
+csharp_prefer_braces = true:warning
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
+dotnet_style_readonly_field = true:warning
+
+# Test projects: xUnit discovers public test classes by reflection and the
+# assertion style intentionally builds throwaway objects.
+[tests/**/*.cs]
+dotnet_diagnostic.CA1812.severity = none
+dotnet_diagnostic.CA1707.severity = none
+
+# Relative string routes are what makes an HTTP test readable; wrapping every
+# one of them in a Uri would obscure the request being asserted.
+dotnet_diagnostic.CA2234.severity = none

@@ -1,13 +1,20 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Npgsql;
 
 namespace EcoMyceliumTracker.Infrastructure.Persistence;
 
-public sealed class DatabaseMigrationRunner(
+public sealed partial class DatabaseMigrationRunner(
     NpgsqlDataSource dataSource,
     ILogger<DatabaseMigrationRunner> logger)
 {
     private const long MigrationLockId = 4_243_691_742;
+
+    [LoggerMessage(
+        EventId = 2000,
+        Level = LogLevel.Information,
+        Message = "Applying database migration {MigrationName}")]
+    private static partial void LogApplyingMigration(ILogger logger, string migrationName);
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
     {
@@ -53,12 +60,9 @@ public sealed class DatabaseMigrationRunner(
                 continue;
             }
 
-            await using var stream = assembly.GetManifestResourceStream(resourceName)
-                ?? throw new InvalidOperationException($"Migration resource '{resourceName}' was not found.");
-            using var reader = new StreamReader(stream);
-            var sql = await reader.ReadToEndAsync(cancellationToken);
+            var sql = await ReadMigrationAsync(assembly, resourceName, cancellationToken);
 
-            logger.LogInformation("Applying database migration {MigrationName}", migrationName);
+            LogApplyingMigration(logger, migrationName);
             await ExecuteAsync(connection, transaction, sql, cancellationToken);
 
             await using var insertCommand = new NpgsqlCommand(
@@ -70,6 +74,18 @@ public sealed class DatabaseMigrationRunner(
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task<string> ReadMigrationAsync(
+        Assembly assembly,
+        string resourceName,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = assembly.GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException($"Migration resource '{resourceName}' was not found.");
+        using var reader = new StreamReader(stream);
+
+        return await reader.ReadToEndAsync(cancellationToken);
     }
 
     private static async Task<HashSet<string>> GetAppliedMigrationsAsync(
@@ -92,6 +108,11 @@ public sealed class DatabaseMigrationRunner(
         return migrations;
     }
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The statements come from migration files embedded in the " +
+            "assembly at build time, never from user input.")]
     private static async Task ExecuteAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,

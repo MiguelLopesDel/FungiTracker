@@ -4,9 +4,28 @@ using Npgsql;
 
 namespace EcoMyceliumTracker.Infrastructure.Errors;
 
-public sealed class ApiExceptionHandler(
+public sealed partial class ApiExceptionHandler(
     ILogger<ApiExceptionHandler> logger) : IExceptionHandler
 {
+    [LoggerMessage(
+        EventId = 1000,
+        Level = LogLevel.Error,
+        Message = "Unhandled API exception for {Path}")]
+    private static partial void LogUnhandledException(
+        ILogger logger,
+        string path,
+        Exception exception);
+
+    [LoggerMessage(
+        EventId = 1001,
+        Level = LogLevel.Warning,
+        Message = "API request failed with {StatusCode} and code {ErrorCode} for {Path}")]
+    private static partial void LogFailedRequest(
+        ILogger logger,
+        int statusCode,
+        string errorCode,
+        string path);
+
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
@@ -16,15 +35,11 @@ public sealed class ApiExceptionHandler(
 
         if (status >= StatusCodes.Status500InternalServerError)
         {
-            logger.LogError(exception, "Unhandled API exception for {Path}", httpContext.Request.Path);
+            LogUnhandledException(logger, httpContext.Request.Path, exception);
         }
         else
         {
-            logger.LogWarning(
-                "API request failed with {StatusCode} and code {ErrorCode} for {Path}",
-                status,
-                code,
-                httpContext.Request.Path);
+            LogFailedRequest(logger, status, code, httpContext.Request.Path);
         }
 
         var problem = new ProblemDetails

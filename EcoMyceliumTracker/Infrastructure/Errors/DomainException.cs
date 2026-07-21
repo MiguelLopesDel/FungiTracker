@@ -1,5 +1,13 @@
-﻿namespace EcoMyceliumTracker.Infrastructure.Errors;
+﻿using System.Diagnostics.CodeAnalysis;
 
+namespace EcoMyceliumTracker.Infrastructure.Errors;
+
+[SuppressMessage(
+    "Design",
+    "CA1032:Implement standard exception constructors",
+    Justification = "Every domain error carries a status code and an error code. " +
+        "The standard constructors would allow building one without them, so " +
+        "instances are created through the factory methods below instead.")]
 public sealed class DomainException(
     string message,
     int statusCode,
