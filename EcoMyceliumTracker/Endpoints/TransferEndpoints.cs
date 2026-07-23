@@ -1,5 +1,6 @@
 ﻿using EcoMyceliumTracker.Application;
 using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Validation;
 
 namespace EcoMyceliumTracker.Endpoints;
@@ -18,15 +19,16 @@ public static class TransferEndpoints
         return api;
     }
 
+    // The filter binds straight from the query string, so there is no second
+    // type mirroring its fields. Paging stays as ordinary parameters, whose
+    // defaults [AsParameters] would otherwise overwrite with default(int).
     private static async Task<IResult> GetPageAsync(
-        [AsParameters] TransferListQuery query,
+        [AsParameters] TransferFilter filter,
         TransferService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(await service.GetPageAsync(
-            query.Page,
-            query.PageSize,
-            query.ToFilter(),
-            cancellationToken));
+        CancellationToken cancellationToken,
+        int page = 1,
+        int pageSize = RequestValidators.DefaultPageSize) =>
+        Results.Ok(await service.GetPageAsync(page, pageSize, filter, cancellationToken));
 
     private static async Task<IResult> GetHighEnergyAsync(
         TransferService service,

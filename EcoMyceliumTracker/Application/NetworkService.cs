@@ -1,4 +1,5 @@
 ﻿using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
 using EcoMyceliumTracker.Repositories;
 using EcoMyceliumTracker.Validation;
@@ -16,7 +17,7 @@ public sealed class NetworkService(
         string? soilType,
         CancellationToken cancellationToken = default)
     {
-        EnsureValidPagination(page, pageSize);
+        Paging.EnsureValid(page, pageSize);
 
         return await repository.GetPageAsync(page, pageSize, scientificName, soilType, cancellationToken);
     }
@@ -28,17 +29,8 @@ public sealed class NetworkService(
         CreateMyceliumNetworkRequest request,
         CancellationToken cancellationToken = default)
     {
-        var errors = RequestValidators.Validate(request, timeProvider.GetUtcNow());
-        if (errors.Count > 0)
-        {
-            throw DomainException.InvalidRequest(errors);
-        }
-
         return await repository.CreateAsync(
-            ToModel(
-                Validated.Required(request.ScientificName),
-                Validated.Required(request.SoilType),
-                request.DiscoveredAt),
+            ToModel(ParseOrThrow(request.ScientificName, request.SoilType, request.DiscoveredAt)),
             cancellationToken);
     }
 
@@ -47,18 +39,9 @@ public sealed class NetworkService(
         UpdateMyceliumNetworkRequest request,
         CancellationToken cancellationToken = default)
     {
-        var errors = RequestValidators.Validate(request, timeProvider.GetUtcNow());
-        if (errors.Count > 0)
-        {
-            throw DomainException.InvalidRequest(errors);
-        }
-
         return await repository.UpdateAsync(
             id,
-            ToModel(
-                Validated.Required(request.ScientificName),
-                Validated.Required(request.SoilType),
-                request.DiscoveredAt),
+            ToModel(ParseOrThrow(request.ScientificName, request.SoilType, request.DiscoveredAt)),
             cancellationToken) ?? throw NetworkNotFound();
     }
 
@@ -70,26 +53,31 @@ public sealed class NetworkService(
         }
     }
 
-    internal static void EnsureValidPagination(int page, int pageSize)
-    {
-        var errors = RequestValidators.ValidatePagination(page, pageSize);
-        if (errors.Count > 0)
-        {
-            throw DomainException.InvalidRequest(errors);
-        }
-    }
-
     internal static DomainException NetworkNotFound() =>
         DomainException.NotFound("A rede informada não existe.", "network_not_found");
 
-    private static MyceliumNetwork ToModel(
-        string scientificName,
-        string soilType,
-        DateTimeOffset discoveredAt) =>
+    private NetworkFields ParseOrThrow(
+        string? scientificName,
+        string? soilType,
+        DateTimeOffset discoveredAt)
+    {
+        var (errors, fields) = RequestValidators.ParseNetwork(
+            scientificName,
+            soilType,
+            discoveredAt,
+            timeProvider.GetUtcNow());
+
+        return errors.Count > 0 ? throw DomainException.InvalidRequest(errors) : fields;
+    }
+
+    private static MyceliumNetwork ToModel(NetworkFields fields) =>
         new()
         {
-            ScientificName = scientificName.Trim(),
-            SoilType = soilType.Trim(),
-            DiscoveredAt = discoveredAt.ToUniversalTime(),
+            // The caller decides identity; a repository should persist what it
+            // is given, not alter it.
+            Id = Guid.NewGuid(),
+            ScientificName = fields.ScientificName,
+            SoilType = fields.SoilType,
+            DiscoveredAt = fields.DiscoveredAt,
         };
 }

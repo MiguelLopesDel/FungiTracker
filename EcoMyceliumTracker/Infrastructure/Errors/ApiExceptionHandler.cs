@@ -1,4 +1,4 @@
-﻿using EcoMyceliumTracker.Application;
+﻿using EcoMyceliumTracker.Domain;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
@@ -109,15 +109,19 @@ public sealed partial class ApiExceptionHandler(
 
     // Conflicts are not a domain kind: they are raised by the database when a
     // constraint rejects a write, and handled by the PostgresException cases.
+    // Every kind is listed on purpose: a new one should break the build here
+    // rather than fall silently into 422.
     private static int MapKind(DomainErrorKind kind) => kind switch
     {
         DomainErrorKind.NotFound => StatusCodes.Status404NotFound,
-        _ => StatusCodes.Status422UnprocessableEntity,
+        DomainErrorKind.Validation => StatusCodes.Status422UnprocessableEntity,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unmapped domain error kind."),
     };
 
     private static string TitleFor(DomainErrorKind kind) => kind switch
     {
         DomainErrorKind.NotFound => "Resource not found",
-        _ => "Business rule violation",
+        DomainErrorKind.Validation => "Business rule violation",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unmapped domain error kind."),
     };
 }

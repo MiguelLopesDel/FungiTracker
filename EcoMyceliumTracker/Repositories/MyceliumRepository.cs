@@ -1,10 +1,9 @@
 ﻿using Dapper;
 using EcoMyceliumTracker.Models;
-using Npgsql;
 
 namespace EcoMyceliumTracker.Repositories;
 
-public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumRepository
+public sealed class MyceliumRepository(IDbSession session) : IMyceliumRepository
 {
     private const string SelectColumns = """
         id,
@@ -21,7 +20,7 @@ public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumR
         string? soilType,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var parameters = new
         {
             ScientificName = NullIfWhiteSpace(scientificName),
@@ -46,43 +45,55 @@ public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumR
               AND (CAST(@SoilType AS text) IS NULL OR soil_type ILIKE '%' || @SoilType || '%' ESCAPE '\');
             """;
 
-        await using var grid = await connection.QueryMultipleAsync(
-            new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
+        await using var grid = await lease.Connection.QueryMultipleAsync(
+            new CommandDefinition(sql, parameters, transaction: lease.Transaction, cancellationToken: cancellationToken));
         var items = (await grid.ReadAsync<MyceliumNetwork>()).AsList();
         var total = await grid.ReadSingleAsync<long>();
 
         return new PagedResult<MyceliumNetwork>(items, page, pageSize, total);
     }
 
+    public async Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var lease = await session.LeaseAsync(cancellationToken);
+        const string sql = "SELECT EXISTS(SELECT 1 FROM mycelium_networks WHERE id = @Id);";
+
+        return await lease.Connection.ExecuteScalarAsync<bool>(
+            new CommandDefinition(
+                sql,
+                new { Id = id },
+                transaction: lease.Transaction,
+                cancellationToken: cancellationToken));
+    }
+
     public async Task<MyceliumNetwork?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             SELECT {{SelectColumns}}
             FROM mycelium_networks
             WHERE id = @Id;
             """;
 
-        return await connection.QuerySingleOrDefaultAsync<MyceliumNetwork>(
-            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
+        return await lease.Connection.QuerySingleOrDefaultAsync<MyceliumNetwork>(
+            new CommandDefinition(sql, new { Id = id }, transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
     public async Task<MyceliumNetwork> CreateAsync(
         MyceliumNetwork network,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        network.Id = Guid.NewGuid();
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             INSERT INTO mycelium_networks (id, scientific_name, soil_type, discovered_at)
             VALUES (@Id, @ScientificName, @SoilType, @DiscoveredAt)
             RETURNING {{SelectColumns}};
             """;
 
-        return await connection.QuerySingleAsync<MyceliumNetwork>(
-            new CommandDefinition(sql, network, cancellationToken: cancellationToken));
+        return await lease.Connection.QuerySingleAsync<MyceliumNetwork>(
+            new CommandDefinition(sql, network, transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
     public async Task<MyceliumNetwork?> UpdateAsync(
@@ -90,7 +101,7 @@ public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumR
         MyceliumNetwork network,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             UPDATE mycelium_networks
             SET scientific_name = @ScientificName,
@@ -100,19 +111,19 @@ public sealed class MyceliumRepository(NpgsqlDataSource dataSource) : IMyceliumR
             RETURNING {{SelectColumns}};
             """;
 
-        return await connection.QuerySingleOrDefaultAsync<MyceliumNetwork>(
+        return await lease.Connection.QuerySingleOrDefaultAsync<MyceliumNetwork>(
             new CommandDefinition(
                 sql,
                 new { Id = id, network.ScientificName, network.SoilType, network.DiscoveredAt },
-                cancellationToken: cancellationToken));
+                transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         const string sql = "DELETE FROM mycelium_networks WHERE id = @Id;";
-        var affectedRows = await connection.ExecuteAsync(
-            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
+        var affectedRows = await lease.Connection.ExecuteAsync(
+            new CommandDefinition(sql, new { Id = id }, transaction: lease.Transaction, cancellationToken: cancellationToken));
         return affectedRows > 0;
     }
 

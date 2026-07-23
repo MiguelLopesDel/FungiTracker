@@ -1,6 +1,7 @@
 ﻿using EcoMyceliumTracker.Application;
 using EcoMyceliumTracker.Configuration;
 using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
 using EcoMyceliumTracker.UnitTests.Fakes;
 using Microsoft.Extensions.Options;
@@ -104,7 +105,7 @@ public sealed class ServiceTests
     {
         var sensors = new FakeSensorRepository();
         var networks = new FakeNetworkRepository();
-        var network = await networks.CreateAsync(new MyceliumNetwork());
+        var network = await networks.CreateAsync(new MyceliumNetwork { Id = Guid.NewGuid() });
         var service = new SensorService(sensors, networks);
 
         var error = await Assert.ThrowsAsync<DomainException>(() => service.CreateAsync(
@@ -142,13 +143,13 @@ public sealed class ServiceTests
     {
         var sensors = new FakeSensorRepository();
         var networks = new FakeNetworkRepository();
-        var network = await networks.CreateAsync(new MyceliumNetwork());
+        var network = await networks.CreateAsync(new MyceliumNetwork { Id = Guid.NewGuid() });
         var service = new SensorService(sensors, networks);
 
         var created = await service.CreateAsync(
             new CreateSensorNodeRequest(network.Id, "  (10.5, 20.25)  ", 60, true));
 
-        Assert.Equal("(10.5, 20.25)", created.Location);
+        Assert.Equal(new Coordinates(10.5, 20.25), created.Location);
         Assert.Equal(network.Id, created.NetworkId);
         Assert.Single(sensors.Items);
     }
@@ -181,14 +182,14 @@ public sealed class ServiceTests
     public async Task UpdateSensor_AppliesTheNewValues()
     {
         var sensors = new FakeSensorRepository();
-        var stored = await sensors.CreateAsync(new SensorNode { Location = "1,2", MoistureLevel = 10 });
+        var stored = await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), Location = new Coordinates(1, 2), MoistureLevel = 10 });
         var service = new SensorService(sensors, new FakeNetworkRepository());
 
         var updated = await service.UpdateAsync(
             stored.Id,
             new UpdateSensorNodeRequest("30,40", 77, false));
 
-        Assert.Equal("30,40", updated.Location);
+        Assert.Equal(new Coordinates(30, 40), updated.Location);
         Assert.Equal(77, updated.MoistureLevel);
         Assert.False(updated.IsActive);
     }
@@ -220,7 +221,7 @@ public sealed class ServiceTests
     public async Task GetSensor_WhenPresent_IsReturned()
     {
         var sensors = new FakeSensorRepository();
-        var stored = await sensors.CreateAsync(new SensorNode { Location = "1,2" });
+        var stored = await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), Location = new Coordinates(1, 2) });
         var service = new SensorService(sensors, new FakeNetworkRepository());
 
         Assert.Equal(stored.Id, (await service.GetByIdAsync(stored.Id)).Id);
@@ -231,9 +232,9 @@ public sealed class ServiceTests
     {
         var sensors = new FakeSensorRepository();
         var networks = new FakeNetworkRepository();
-        var network = await networks.CreateAsync(new MyceliumNetwork());
-        await sensors.CreateAsync(new SensorNode { NetworkId = network.Id, IsActive = true });
-        await sensors.CreateAsync(new SensorNode { NetworkId = network.Id, IsActive = false });
+        var network = await networks.CreateAsync(new MyceliumNetwork { Id = Guid.NewGuid() });
+        await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), NetworkId = network.Id, IsActive = true });
+        await sensors.CreateAsync(new SensorNode { Id = Guid.NewGuid(), NetworkId = network.Id, IsActive = false });
         var service = new SensorService(sensors, networks);
 
         var page = await service.GetPageByNetworkIdAsync(network.Id, 1, 20, isActive: true);
@@ -258,7 +259,7 @@ public sealed class ServiceTests
     public async Task ListNetworks_WithValidPagination_ReachesTheRepository()
     {
         var repository = new FakeNetworkRepository();
-        await repository.CreateAsync(new MyceliumNetwork { ScientificName = "Armillaria" });
+        await repository.CreateAsync(new MyceliumNetwork { Id = Guid.NewGuid(), ScientificName = "Armillaria" });
         var service = new NetworkService(repository, Clock());
 
         var page = await service.GetPageAsync(1, 20, "armi", null);
@@ -272,10 +273,11 @@ public sealed class ServiceTests
     [Fact]
     public async Task CreateTransfer_WithoutTimestamp_UsesTheCurrentInstant()
     {
-        var service = NewTransferService(out _);
+        var service = NewTransferService(out var repository);
+        var (source, target) = SeedEligibleSensors(repository);
 
         var created = await service.CreateAsync(
-            new CreateNutrientTransferRequest(Guid.NewGuid(), Guid.NewGuid(), 100));
+            new CreateNutrientTransferRequest(source, target, 100));
 
         Assert.Equal(Now, created.TransferredAt);
     }
@@ -283,11 +285,12 @@ public sealed class ServiceTests
     [Fact]
     public async Task CreateTransfer_WithTimestamp_KeepsTheOneSupplied()
     {
-        var service = NewTransferService(out _);
+        var service = NewTransferService(out var repository);
+        var (source, target) = SeedEligibleSensors(repository);
         var supplied = Now.AddHours(-3);
 
         var created = await service.CreateAsync(
-            new CreateNutrientTransferRequest(Guid.NewGuid(), Guid.NewGuid(), 100, supplied));
+            new CreateNutrientTransferRequest(source, target, 100, supplied));
 
         Assert.Equal(supplied, created.TransferredAt);
     }
@@ -356,6 +359,20 @@ public sealed class ServiceTests
         Assert.Equal(DomainErrorKind.NotFound, error.Kind);
     }
 
+    /// <summary>
+    /// Two active sensors on the same network, which is what the policy needs
+    /// before a transfer between them is allowed.
+    /// </summary>
+    private static (Guid Source, Guid Target) SeedEligibleSensors(FakeTransferRepository repository)
+    {
+        var network = Guid.NewGuid();
+        var source = new TransferSensor(Guid.NewGuid(), network, IsActive: true, new Coordinates(10, 20));
+        var target = new TransferSensor(Guid.NewGuid(), network, IsActive: true, new Coordinates(30, 40));
+        repository.Sensors.Add(source);
+        repository.Sensors.Add(target);
+        return (source.Id, target.Id);
+    }
+
     private static TransferService NewTransferService(
         out FakeTransferRepository repository,
         int thresholdMg = 500)
@@ -363,6 +380,7 @@ public sealed class ServiceTests
         repository = new FakeTransferRepository();
         return new TransferService(
             repository,
+            new FakeUnitOfWork(),
             Options.Create(new TransferOptions { HighEnergyThresholdMg = thresholdMg }),
             Clock());
     }

@@ -1,12 +1,10 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using Dapper;
-using EcoMyceliumTracker.Application;
+﻿using Dapper;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
-using Npgsql;
 
 namespace EcoMyceliumTracker.Repositories;
 
-public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferRepository
+public sealed class TransferRepository(IDbSession session) : ITransferRepository
 {
     private const string SelectColumns = """
         t.id AS Id,
@@ -18,13 +16,13 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
         target.location::text AS TargetLocation
         """;
 
-    public async Task<PagedResult<TransferView>> GetPageAsync(
+    public async Task<PagedResult<NutrientTransferDetails>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var parameters = new
         {
             filter.MinimumCarbonMg,
@@ -58,19 +56,19 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             WHERE {{filters}};
             """;
 
-        await using var grid = await connection.QueryMultipleAsync(
-            new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
-        var items = (await grid.ReadAsync<TransferView>()).AsList();
+        await using var grid = await lease.Connection.QueryMultipleAsync(
+            new CommandDefinition(sql, parameters, transaction: lease.Transaction, cancellationToken: cancellationToken));
+        var items = (await grid.ReadAsync<NutrientTransferDetails>()).AsList();
         var total = await grid.ReadSingleAsync<long>();
 
-        return new PagedResult<TransferView>(items, page, pageSize, total);
+        return new PagedResult<NutrientTransferDetails>(items, page, pageSize, total);
     }
 
-    public async Task<TransferView?> GetByIdAsync(
+    public async Task<NutrientTransferDetails?> GetByIdAsync(
         long id,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         const string sql = $"""
             SELECT {SelectColumns}
             FROM nutrient_transfers t
@@ -79,20 +77,20 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             WHERE t.id = @Id;
             """;
 
-        return await connection.QuerySingleOrDefaultAsync<TransferView>(
-            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
+        return await lease.Connection.QuerySingleOrDefaultAsync<NutrientTransferDetails>(
+            new CommandDefinition(sql, new { Id = id }, transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
-    public async Task<TransferView> CreateAsync(
-        NutrientTransfer transfer,
+    public async Task<IReadOnlyList<TransferSensor>> GetForTransferAsync(
+        Guid sourceNodeId,
+        Guid targetNodeId,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
 
-        // The location comes along here so that building the response needs no
-        // second round trip: these are the same two sensors it would join to.
-        const string sensorSql = """
+        // FOR SHARE is the weakest mode that stops either sensor from being
+        // deactivated, moved or deleted before the insert. See TransferLockTests.
+        const string sql = """
             SELECT id AS Id,
                    network_id AS NetworkId,
                    is_active AS IsActive,
@@ -102,38 +100,24 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
             ORDER BY id
             FOR SHARE;
             """;
-        var states = (await connection.QueryAsync<TransferSensorState>(
+
+        var sensors = await lease.Connection.QueryAsync<TransferSensor>(
             new CommandDefinition(
-                sensorSql,
-                new { Ids = new[] { transfer.SourceNodeId, transfer.TargetNodeId } },
-                transaction,
-                cancellationToken: cancellationToken))).AsList();
+                sql,
+                new { Ids = new[] { sourceNodeId, targetNodeId } },
+                transaction: lease.Transaction,
+                cancellationToken: cancellationToken));
 
-        var source = states.SingleOrDefault(sensor => sensor.Id == transfer.SourceNodeId);
-        var target = states.SingleOrDefault(sensor => sensor.Id == transfer.TargetNodeId);
+        return sensors.AsList();
+    }
 
-        if (source is null || target is null)
-        {
-            throw DomainException.NotFound(
-                "O sensor de origem ou de destino não existe.",
-                "transfer_sensor_not_found");
-        }
+    public async Task<NutrientTransfer> AddAsync(
+        NutrientTransfer transfer,
+        CancellationToken cancellationToken = default)
+    {
+        await using var lease = await session.LeaseAsync(cancellationToken);
 
-        if (!source.IsActive || !target.IsActive)
-        {
-            throw DomainException.Validation(
-                "Transferências só podem envolver sensores ativos.",
-                "inactive_transfer_sensor");
-        }
-
-        if (source.NetworkId != target.NetworkId)
-        {
-            throw DomainException.Validation(
-                "Os sensores de origem e destino devem pertencer à mesma rede.",
-                "sensors_from_different_networks");
-        }
-
-        const string insertSql = """
+        const string sql = """
             INSERT INTO nutrient_transfers
                 (source_node_id, target_node_id, carbon_amount_mg, transferred_at)
             VALUES (@SourceNodeId, @TargetNodeId, @CarbonAmountMg, @TransferredAt)
@@ -143,42 +127,12 @@ public sealed class TransferRepository(NpgsqlDataSource dataSource) : ITransferR
                       carbon_amount_mg AS CarbonAmountMg,
                       transferred_at AS TransferredAt;
             """;
-        var created = await connection.QuerySingleAsync<NutrientTransfer>(
-            new CommandDefinition(insertSql, transfer, transaction, cancellationToken: cancellationToken));
 
-        await transaction.CommitAsync(cancellationToken);
-
-        return new TransferView
-        {
-            Id = created.Id,
-            SourceNodeId = created.SourceNodeId,
-            TargetNodeId = created.TargetNodeId,
-            CarbonAmountMg = created.CarbonAmountMg,
-            TransferredAt = created.TransferredAt,
-            SourceLocation = source.Location,
-            TargetLocation = target.Location,
-        };
-    }
-
-    // Dapper builds this type by reflection, so no analyzer can see it being
-    // instantiated or its properties being written.
-    [SuppressMessage(
-        "Performance",
-        "CA1812:Avoid uninstantiated internal classes",
-        Justification = "Dapper materializes this type by reflection.")]
-    [SuppressMessage(
-        "Major Code Smell",
-        "S3459:Unassigned members should be removed",
-        Justification = "Dapper assigns these when materializing the row.")]
-    [SuppressMessage(
-        "Major Code Smell",
-        "S1144:Unused private types or members should be removed",
-        Justification = "Dapper needs the setters to materialize the row.")]
-    private sealed class TransferSensorState
-    {
-        public Guid Id { get; init; }
-        public Guid NetworkId { get; init; }
-        public bool IsActive { get; init; }
-        public string Location { get; init; } = string.Empty;
+        return await lease.Connection.QuerySingleAsync<NutrientTransfer>(
+            new CommandDefinition(
+                sql,
+                transfer,
+                transaction: lease.Transaction,
+                cancellationToken: cancellationToken));
     }
 }

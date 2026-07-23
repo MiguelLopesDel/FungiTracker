@@ -1,7 +1,12 @@
 ﻿using EcoMyceliumTracker.Contracts;
-using EcoMyceliumTracker.Models;
+using EcoMyceliumTracker.Domain;
 
 namespace EcoMyceliumTracker.Validation;
+
+/// <summary>
+/// The checked fields of a network, trimmed and non-null.
+/// </summary>
+public sealed record NetworkFields(string ScientificName, string SoilType, DateTimeOffset DiscoveredAt);
 
 public static class RequestValidators
 {
@@ -20,26 +25,18 @@ public static class RequestValidators
     public static Dictionary<string, string[]> Validate(
         CreateMyceliumNetworkRequest request,
         DateTimeOffset now) =>
-        ValidateNetwork(request.ScientificName, request.SoilType, request.DiscoveredAt, now);
+        ParseNetwork(request.ScientificName, request.SoilType, request.DiscoveredAt, now).Errors;
 
     public static Dictionary<string, string[]> Validate(
         UpdateMyceliumNetworkRequest request,
         DateTimeOffset now) =>
-        ValidateNetwork(request.ScientificName, request.SoilType, request.DiscoveredAt, now);
+        ParseNetwork(request.ScientificName, request.SoilType, request.DiscoveredAt, now).Errors;
 
-    public static Dictionary<string, string[]> Validate(CreateSensorNodeRequest request)
-    {
-        var errors = ValidateSensor(request.Location, request.MoistureLevel);
-        if (request.NetworkId == Guid.Empty)
-        {
-            errors[nameof(request.NetworkId)] = ["O identificador da rede é obrigatório."];
-        }
-
-        return errors;
-    }
+    public static Dictionary<string, string[]> Validate(CreateSensorNodeRequest request) =>
+        ParseSensor(request).Errors;
 
     public static Dictionary<string, string[]> Validate(UpdateSensorNodeRequest request) =>
-        ValidateSensor(request.Location, request.MoistureLevel);
+        ParseSensor(request.Location, request.MoistureLevel).Errors;
 
     public static Dictionary<string, string[]> Validate(
         CreateNutrientTransferRequest request,
@@ -76,16 +73,16 @@ public static class RequestValidators
     }
 
     /// <summary>
-    /// Pagination plus the filter-specific rules for listing transfers. These
-    /// used to sit inline in the endpoint, where nothing could reach them
-    /// without going through HTTP.
+    /// Checks the criteria of a transfer listing.
     /// </summary>
-    public static Dictionary<string, string[]> ValidateTransferFilters(
-        int page,
-        int pageSize,
-        TransferFilter filter)
+    /// <remarks>
+    /// Here rather than on TransferFilter itself: the keys are query string
+    /// parameter names, which is knowledge of the HTTP boundary that a domain
+    /// type has no business carrying.
+    /// </remarks>
+    public static Dictionary<string, string[]> Validate(TransferFilter filter)
     {
-        var errors = ValidatePagination(page, pageSize);
+        var errors = new Dictionary<string, string[]>();
 
         if (filter.MinimumCarbonMg < 0)
         {
@@ -117,7 +114,11 @@ public static class RequestValidators
         return errors;
     }
 
-    private static Dictionary<string, string[]> ValidateNetwork(
+    /// <summary>
+    /// Checks a network and hands back its values, so the caller can build the
+    /// model without asserting a second time that they are present.
+    /// </summary>
+    public static (Dictionary<string, string[]> Errors, NetworkFields Fields) ParseNetwork(
         string? scientificName,
         string? soilType,
         DateTimeOffset discoveredAt,
@@ -125,23 +126,21 @@ public static class RequestValidators
     {
         var errors = new Dictionary<string, string[]>();
 
-        if (string.IsNullOrWhiteSpace(scientificName))
-        {
-            errors[nameof(scientificName)] = ["O nome científico é obrigatório."];
-        }
-        else if (scientificName.Length > MaximumScientificNameLength)
-        {
-            errors[nameof(scientificName)] = [$"O nome científico deve ter no máximo {MaximumScientificNameLength} caracteres."];
-        }
+        var name = RequiredText(
+            scientificName,
+            nameof(scientificName),
+            MaximumScientificNameLength,
+            "O nome científico é obrigatório.",
+            $"O nome científico deve ter no máximo {MaximumScientificNameLength} caracteres.",
+            errors);
 
-        if (string.IsNullOrWhiteSpace(soilType))
-        {
-            errors[nameof(soilType)] = ["O tipo de solo é obrigatório."];
-        }
-        else if (soilType.Length > MaximumSoilTypeLength)
-        {
-            errors[nameof(soilType)] = [$"O tipo de solo deve ter no máximo {MaximumSoilTypeLength} caracteres."];
-        }
+        var soil = RequiredText(
+            soilType,
+            nameof(soilType),
+            MaximumSoilTypeLength,
+            "O tipo de solo é obrigatório.",
+            $"O tipo de solo deve ter no máximo {MaximumSoilTypeLength} caracteres.",
+            errors);
 
         if (discoveredAt == default)
         {
@@ -152,14 +151,67 @@ public static class RequestValidators
             errors[nameof(discoveredAt)] = ["A data de descoberta não pode estar no futuro."];
         }
 
-        return errors;
+        return (errors, new NetworkFields(name, soil, discoveredAt.ToUniversalTime()));
     }
 
-    private static Dictionary<string, string[]> ValidateSensor(string? location, decimal moistureLevel)
+    /// <summary>
+    /// Checks one text field and hands back the trimmed value.
+    /// </summary>
+    /// <remarks>
+    /// Returning the value is what lets the caller build its model without
+    /// asserting non-null a second time: when the field is missing this
+    /// records the error and returns an empty string, which is never read
+    /// because the caller throws as soon as the dictionary is not empty.
+    /// </remarks>
+    private static string RequiredText(
+        string? value,
+        string field,
+        int maximumLength,
+        string missingMessage,
+        string tooLongMessage,
+        Dictionary<string, string[]> errors)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            errors[field] = [missingMessage];
+            return string.Empty;
+        }
+
+        if (value.Length > maximumLength)
+        {
+            errors[field] = [tooLongMessage];
+        }
+
+        return value.Trim();
+    }
+
+    /// <summary>
+    /// Checks a new sensor in one pass, so a request with both a bad location
+    /// and a missing network reports both.
+    /// </summary>
+    public static (Dictionary<string, string[]> Errors, Coordinates Location) ParseSensor(
+        CreateSensorNodeRequest request)
+    {
+        var (errors, location) = ParseSensor(request.Location, request.MoistureLevel);
+        if (request.NetworkId == Guid.Empty)
+        {
+            errors[nameof(request.NetworkId)] = ["O identificador da rede é obrigatório."];
+        }
+
+        return (errors, location);
+    }
+
+    /// <summary>
+    /// Checks a sensor and hands back its location, trimmed and non-null.
+    /// </summary>
+    public static (Dictionary<string, string[]> Errors, Coordinates Location) ParseSensor(
+        string? location,
+        decimal moistureLevel)
     {
         var errors = new Dictionary<string, string[]>();
 
-        if (!CoordinatesParser.TryParse(location, out _))
+        // The parsed value is kept: this is the only place the text is read.
+        if (!CoordinatesParser.TryParse(location, out var parsed))
         {
             errors[nameof(location)] = ["A localização deve usar o formato 'x,y', com ponto como separador decimal."];
         }
@@ -169,6 +221,6 @@ public static class RequestValidators
             errors[nameof(moistureLevel)] = [$"O nível de umidade deve estar entre {MinimumMoistureLevel} e {MaximumMoistureLevel}."];
         }
 
-        return errors;
+        return (errors, parsed);
     }
 }

@@ -1,18 +1,15 @@
-﻿using System.Globalization;
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 
 namespace EcoMyceliumTracker.IntegrationTests;
 
 public sealed class ApiIntegrationTests
 {
-    private const string ApiKey = "integration-test-api-key";
+    private const string ApiKey = ApiFactory.ApiKey;
 
     [PostgresFact]
     public async Task ApiWorkflow_EnforcesAuthenticationPaginationAndTransferRules()
@@ -186,7 +183,7 @@ public sealed class ApiIntegrationTests
             new CreateNutrientTransferRequest(source.Id, target.Id, 100));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var created = await response.Content.ReadFromJsonAsync<TransferView>();
+        var created = await response.Content.ReadFromJsonAsync<NutrientTransferDetails>();
         Assert.NotNull(created);
         Assert.InRange(created.TransferredAt, before, DateTimeOffset.UtcNow.AddSeconds(5));
     }
@@ -206,7 +203,7 @@ public sealed class ApiIntegrationTests
         var atThreshold = await CreateTransferAsync(client, source.Id, target.Id, 500);
         var belowThreshold = await CreateTransferAsync(client, source.Id, target.Id, 499);
 
-        var page = await client.GetFromJsonAsync<PagedResult<TransferView>>(
+        var page = await client.GetFromJsonAsync<PagedResult<NutrientTransferDetails>>(
             "/api/transfers/high-energy?pageSize=100");
         Assert.NotNull(page);
 
@@ -357,12 +354,22 @@ public sealed class ApiIntegrationTests
         // A point column is read back as "(x,y)", which is not the "x,y" the
         // caller sent. The parser has to keep accepting both, otherwise an
         // update built from a previous GET would start being rejected.
-        var created = await CreateSensorAsync(client, network.Id, "10.5,20.25");
-        Assert.Equal("(10.5,20.25)", created.Location);
+        var response = await client.PostAsJsonAsync(
+            "/api/sensors",
+            new CreateSensorNodeRequest(network.Id, "10.5,20.25", 50, true));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        // Asserted on the raw body: Location is a Coordinates in the model, and
+        // what has to stay stable is the text it serialises to.
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"location\":\"(10.5,20.25)\"", body, StringComparison.Ordinal);
+
+        var created = await response.Content.ReadFromJsonAsync<SensorNode>();
+        Assert.NotNull(created);
 
         var updated = await client.PutAsJsonAsync(
             $"/api/sensors/{created.Id}",
-            new UpdateSensorNodeRequest(created.Location, 50, true));
+            new UpdateSensorNodeRequest(created.Location.ToString(), 50, true));
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
     }
 
@@ -379,15 +386,15 @@ public sealed class ApiIntegrationTests
         // The listing used to be richer than the detail: it carried both sensor
         // locations and the single-transfer responses did not.
         var created = await CreateTransferAsync(client, source.Id, target.Id, 900);
-        Assert.Equal("(10,20)", created.SourceLocation);
-        Assert.Equal("(30,40)", created.TargetLocation);
+        Assert.Equal(new Coordinates(10, 20), created.SourceLocation);
+        Assert.Equal(new Coordinates(30, 40), created.TargetLocation);
 
-        var detail = await client.GetFromJsonAsync<TransferView>($"/api/transfers/{created.Id}");
+        var detail = await client.GetFromJsonAsync<NutrientTransferDetails>($"/api/transfers/{created.Id}");
         Assert.NotNull(detail);
         Assert.Equal(created.SourceLocation, detail.SourceLocation);
         Assert.Equal(created.TargetLocation, detail.TargetLocation);
 
-        var page = await client.GetFromJsonAsync<PagedResult<TransferView>>(
+        var page = await client.GetFromJsonAsync<PagedResult<NutrientTransferDetails>>(
             $"/api/transfers?sourceNodeId={source.Id}");
         Assert.NotNull(page);
         var listed = Assert.Single(page.Items);
@@ -440,7 +447,7 @@ public sealed class ApiIntegrationTests
         return client;
     }
 
-    private static async Task<TransferView> CreateTransferAsync(
+    private static async Task<NutrientTransferDetails> CreateTransferAsync(
         HttpClient client,
         Guid sourceId,
         Guid targetId,
@@ -450,7 +457,7 @@ public sealed class ApiIntegrationTests
             "/api/transfers",
             new CreateNutrientTransferRequest(sourceId, targetId, carbonAmountMg));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<TransferView>())!;
+        return (await response.Content.ReadFromJsonAsync<NutrientTransferDetails>())!;
     }
 
     private static async Task<SensorNode> CreateSensorAsync(
@@ -477,24 +484,4 @@ public sealed class ApiIntegrationTests
         return (await response.Content.ReadFromJsonAsync<MyceliumNetwork>())!;
     }
 
-    private sealed class ApiFactory(
-        string connectionString,
-        int permitLimit = 1000) : WebApplicationFactory<Program>
-    {
-        protected override void ConfigureWebHost(IWebHostBuilder builder)
-        {
-            builder.UseEnvironment("Testing");
-            builder.ConfigureAppConfiguration((_, configuration) =>
-            {
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:PostgresConnection"] = connectionString,
-                    ["Authentication:ApiKey"] = ApiKey,
-                    ["Cors:AllowedOrigins:0"] = "http://localhost:3000",
-                    ["Database:RunMigrations"] = "true",
-                    ["RateLimit:PermitLimit"] = permitLimit.ToString(CultureInfo.InvariantCulture)
-                });
-            });
-        }
-    }
 }

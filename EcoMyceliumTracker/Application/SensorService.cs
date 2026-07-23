@@ -1,4 +1,5 @@
 ﻿using EcoMyceliumTracker.Contracts;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
 using EcoMyceliumTracker.Repositories;
 using EcoMyceliumTracker.Validation;
@@ -7,7 +8,7 @@ namespace EcoMyceliumTracker.Application;
 
 public sealed class SensorService(
     ISensorRepository repository,
-    IMyceliumRepository networkRepository)
+    INetworkExistence networks)
 {
     public async Task<PagedResult<SensorNode>> GetPageByNetworkIdAsync(
         Guid networkId,
@@ -16,7 +17,7 @@ public sealed class SensorService(
         bool? isActive,
         CancellationToken cancellationToken = default)
     {
-        NetworkService.EnsureValidPagination(page, pageSize);
+        Paging.EnsureValid(page, pageSize);
         await EnsureNetworkExistsAsync(networkId, cancellationToken);
 
         return await repository.GetPageByNetworkIdAsync(
@@ -34,19 +35,15 @@ public sealed class SensorService(
         CreateSensorNodeRequest request,
         CancellationToken cancellationToken = default)
     {
-        var errors = RequestValidators.Validate(request);
-        if (errors.Count > 0)
-        {
-            throw DomainException.InvalidRequest(errors);
-        }
-
+        var location = Parsed(RequestValidators.ParseSensor(request));
         await EnsureNetworkExistsAsync(request.NetworkId, cancellationToken);
 
         return await repository.CreateAsync(
             new SensorNode
             {
+                Id = Guid.NewGuid(),
                 NetworkId = request.NetworkId,
-                Location = Validated.Required(request.Location).Trim(),
+                Location = location,
                 MoistureLevel = request.MoistureLevel,
                 IsActive = request.IsActive,
             },
@@ -58,17 +55,13 @@ public sealed class SensorService(
         UpdateSensorNodeRequest request,
         CancellationToken cancellationToken = default)
     {
-        var errors = RequestValidators.Validate(request);
-        if (errors.Count > 0)
-        {
-            throw DomainException.InvalidRequest(errors);
-        }
+        var location = Parsed(RequestValidators.ParseSensor(request.Location, request.MoistureLevel));
 
         return await repository.UpdateAsync(
             id,
             new SensorNode
             {
-                Location = Validated.Required(request.Location).Trim(),
+                Location = location,
                 MoistureLevel = request.MoistureLevel,
                 IsActive = request.IsActive,
             },
@@ -89,9 +82,14 @@ public sealed class SensorService(
         }
     }
 
+    private static Coordinates Parsed((Dictionary<string, string[]> Errors, Coordinates Location) result) =>
+        result.Errors.Count > 0
+            ? throw DomainException.InvalidRequest(result.Errors)
+            : result.Location;
+
     private async Task EnsureNetworkExistsAsync(Guid networkId, CancellationToken cancellationToken)
     {
-        if (await networkRepository.GetByIdAsync(networkId, cancellationToken) is null)
+        if (!await networks.ExistsAsync(networkId, cancellationToken))
         {
             throw NetworkService.NetworkNotFound();
         }

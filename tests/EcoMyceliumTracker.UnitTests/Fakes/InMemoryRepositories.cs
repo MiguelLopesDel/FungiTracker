@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using EcoMyceliumTracker.Domain;
 using EcoMyceliumTracker.Models;
 using EcoMyceliumTracker.Repositories;
 
@@ -32,6 +33,9 @@ public sealed class FakeNetworkRepository : IMyceliumRepository
             matches.Count));
     }
 
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.ContainsKey(id));
+
     public Task<MyceliumNetwork?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(Items.GetValueOrDefault(id));
 
@@ -39,7 +43,6 @@ public sealed class FakeNetworkRepository : IMyceliumRepository
         MyceliumNetwork network,
         CancellationToken cancellationToken = default)
     {
-        network.Id = Guid.NewGuid();
         Items[network.Id] = network;
         return Task.FromResult(network);
     }
@@ -87,7 +90,6 @@ public sealed class FakeSensorRepository : ISensorRepository
 
     public Task<SensorNode> CreateAsync(SensorNode sensor, CancellationToken cancellationToken = default)
     {
-        sensor.Id = Guid.NewGuid();
         Items[sensor.Id] = sensor;
         return Task.FromResult(sensor);
     }
@@ -131,7 +133,7 @@ public sealed class FakeTransferRepository : ITransferRepository
 
     public int? LastMinimumCarbonMg { get; private set; }
 
-    public Task<PagedResult<TransferView>> GetPageAsync(
+    public Task<PagedResult<NutrientTransferDetails>> GetPageAsync(
         int page,
         int pageSize,
         TransferFilter filter,
@@ -144,22 +146,31 @@ public sealed class FakeTransferRepository : ITransferRepository
             .Select(ToView)
             .ToList();
 
-        return Task.FromResult(new PagedResult<TransferView>(matches, page, pageSize, matches.Count));
+        return Task.FromResult(new PagedResult<NutrientTransferDetails>(matches, page, pageSize, matches.Count));
     }
 
-    public Task<TransferView?> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
+    public Task<NutrientTransferDetails?> GetByIdAsync(long id, CancellationToken cancellationToken = default) =>
         Task.FromResult(Items.FirstOrDefault(item => item.Id == id) is { } found ? ToView(found) : null);
 
-    public Task<TransferView> CreateAsync(
+    public Collection<TransferSensor> Sensors { get; } = [];
+
+    public Task<IReadOnlyList<TransferSensor>> GetForTransferAsync(
+        Guid sourceNodeId,
+        Guid targetNodeId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TransferSensor>>(
+            Sensors.Where(s => s.Id == sourceNodeId || s.Id == targetNodeId).ToList());
+
+    public Task<NutrientTransfer> AddAsync(
         NutrientTransfer transfer,
         CancellationToken cancellationToken = default)
     {
         transfer.Id = Items.Count + 1;
         Items.Add(transfer);
-        return Task.FromResult(ToView(transfer));
+        return Task.FromResult(transfer);
     }
 
-    private static TransferView ToView(NutrientTransfer item) => new()
+    private static NutrientTransferDetails ToView(NutrientTransfer item) => new()
     {
         Id = item.Id,
         SourceNodeId = item.SourceNodeId,
@@ -167,4 +178,27 @@ public sealed class FakeTransferRepository : ITransferRepository
         CarbonAmountMg = item.CarbonAmountMg,
         TransferredAt = item.TransferredAt,
     };
+}
+
+/// <summary>
+/// Runs the service's transactional path without a database. Nothing to roll
+/// back, so committing is only recorded.
+/// </summary>
+public sealed class FakeUnitOfWork : IUnitOfWork
+{
+    public bool Committed { get; private set; }
+
+    public Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IUnitOfWorkTransaction>(new Scope(this));
+
+    private sealed class Scope(FakeUnitOfWork owner) : IUnitOfWorkTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            owner.Committed = true;
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }

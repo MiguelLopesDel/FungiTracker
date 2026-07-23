@@ -21,6 +21,9 @@ using OpenTelemetry.Trace;
 
 Env.Load();
 
+// Dapper needs to know how to read a point back into Coordinates.
+Dapper.SqlMapper.AddTypeHandler(new CoordinatesTypeHandler());
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Nothing downstream needs to know which server is answering.
@@ -50,10 +53,16 @@ builder.Services.AddSingleton(serviceProvider =>
 });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<DatabaseMigrationRunner>();
+// One session per request: repositories lease from it, and a service can wrap
+// several of those calls in one transaction through IUnitOfWork.
+builder.Services.AddScoped<DbSession>();
+builder.Services.AddScoped<IDbSession>(provider => provider.GetRequiredService<DbSession>());
+builder.Services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<DbSession>());
 builder.Services.AddScoped<NetworkService>();
 builder.Services.AddScoped<SensorService>();
 builder.Services.AddScoped<TransferService>();
 builder.Services.AddScoped<IMyceliumRepository, MyceliumRepository>();
+builder.Services.AddScoped<INetworkExistence>(provider => provider.GetRequiredService<IMyceliumRepository>());
 builder.Services.AddScoped<ISensorRepository, SensorRepository>();
 builder.Services.AddScoped<ITransferRepository, TransferRepository>();
 

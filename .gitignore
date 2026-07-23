@@ -13,3 +13,5 @@ TestResults/
 StrykerOutput/
 coverage*.xml
 *.trx
+core
+core.*

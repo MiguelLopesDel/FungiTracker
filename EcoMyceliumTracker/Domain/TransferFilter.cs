@@ -1,10 +1,14 @@
-﻿namespace EcoMyceliumTracker.Models;
+﻿namespace EcoMyceliumTracker.Domain;
 
 /// <summary>
-/// The criteria for narrowing a transfer listing. Grouping them gives the
-/// concept a name and keeps the same five values from being threaded
-/// one-by-one through the endpoint, the service and the repository.
+/// The criteria for narrowing a transfer listing.
 /// </summary>
+/// <remarks>
+/// Lives in Domain, which has no dependencies of its own, because both the
+/// endpoint and the repository refer to it. Application cannot host it: the
+/// services depend on the repositories, so a repository reaching back into
+/// Application would close a cycle.
+/// </remarks>
 public sealed record TransferFilter
 {
     public int? MinimumCarbonMg { get; init; }

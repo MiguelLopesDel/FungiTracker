@@ -1,11 +1,9 @@
 ﻿using Dapper;
 using EcoMyceliumTracker.Models;
-using EcoMyceliumTracker.Validation;
-using Npgsql;
 
 namespace EcoMyceliumTracker.Repositories;
 
-public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepository
+public sealed class SensorRepository(IDbSession session) : ISensorRepository
 {
     private const string SelectColumns = """
         id,
@@ -22,7 +20,7 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
         bool? isActive,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var parameters = new
         {
             NetworkId = networkId,
@@ -46,8 +44,8 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
               AND (CAST(@IsActive AS boolean) IS NULL OR is_active = @IsActive);
             """;
 
-        await using var grid = await connection.QueryMultipleAsync(
-            new CommandDefinition(sql, parameters, cancellationToken: cancellationToken));
+        await using var grid = await lease.Connection.QueryMultipleAsync(
+            new CommandDefinition(sql, parameters, transaction: lease.Transaction, cancellationToken: cancellationToken));
         var items = (await grid.ReadAsync<SensorNode>()).AsList();
         var total = await grid.ReadSingleAsync<long>();
 
@@ -58,44 +56,41 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             SELECT {{SelectColumns}}
             FROM sensor_nodes
             WHERE id = @Id;
             """;
 
-        return await connection.QuerySingleOrDefaultAsync<SensorNode>(
-            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
+        return await lease.Connection.QuerySingleOrDefaultAsync<SensorNode>(
+            new CommandDefinition(sql, new { Id = id }, transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
     public async Task<SensorNode> CreateAsync(
         SensorNode sensor,
         CancellationToken cancellationToken = default)
     {
-        var coordinates = ParseLocation(sensor.Location);
-
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        sensor.Id = Guid.NewGuid();
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             INSERT INTO sensor_nodes (id, network_id, location, moisture_level, is_active)
             VALUES (@Id, @NetworkId, point(@X, @Y), @MoistureLevel, @IsActive)
             RETURNING {{SelectColumns}};
             """;
 
-        return await connection.QuerySingleAsync<SensorNode>(
+        return await lease.Connection.QuerySingleAsync<SensorNode>(
             new CommandDefinition(
                 sql,
                 new
                 {
                     sensor.Id,
                     sensor.NetworkId,
-                    coordinates.X,
-                    coordinates.Y,
+                    sensor.Location.X,
+                    sensor.Location.Y,
                     sensor.MoistureLevel,
                     sensor.IsActive
                 },
-                cancellationToken: cancellationToken));
+                transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
     public async Task<SensorNode?> UpdateAsync(
@@ -103,9 +98,7 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
         SensorNode sensor,
         CancellationToken cancellationToken = default)
     {
-        var coordinates = ParseLocation(sensor.Location);
-
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             UPDATE sensor_nodes
             SET location = point(@X, @Y),
@@ -115,11 +108,11 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
             RETURNING {{SelectColumns}};
             """;
 
-        return await connection.QuerySingleOrDefaultAsync<SensorNode>(
+        return await lease.Connection.QuerySingleOrDefaultAsync<SensorNode>(
             new CommandDefinition(
                 sql,
-                new { Id = id, coordinates.X, coordinates.Y, sensor.MoistureLevel, sensor.IsActive },
-                cancellationToken: cancellationToken));
+                new { Id = id, sensor.Location.X, sensor.Location.Y, sensor.MoistureLevel, sensor.IsActive },
+                transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
     public async Task<SensorNode?> SetActiveAsync(
@@ -127,7 +120,7 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
         bool isActive,
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         var sql = $$"""
             UPDATE sensor_nodes
             SET is_active = @IsActive
@@ -135,24 +128,16 @@ public sealed class SensorRepository(NpgsqlDataSource dataSource) : ISensorRepos
             RETURNING {{SelectColumns}};
             """;
 
-        return await connection.QuerySingleOrDefaultAsync<SensorNode>(
-            new CommandDefinition(sql, new { Id = id, IsActive = isActive }, cancellationToken: cancellationToken));
+        return await lease.Connection.QuerySingleOrDefaultAsync<SensorNode>(
+            new CommandDefinition(sql, new { Id = id, IsActive = isActive }, transaction: lease.Transaction, cancellationToken: cancellationToken));
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var lease = await session.LeaseAsync(cancellationToken);
         const string sql = "DELETE FROM sensor_nodes WHERE id = @Id;";
-        var affectedRows = await connection.ExecuteAsync(
-            new CommandDefinition(sql, new { Id = id }, cancellationToken: cancellationToken));
+        var affectedRows = await lease.Connection.ExecuteAsync(
+            new CommandDefinition(sql, new { Id = id }, transaction: lease.Transaction, cancellationToken: cancellationToken));
         return affectedRows > 0;
     }
-
-    // The location arrives as text because that is how PostgreSQL renders a
-    // point. SensorService has already rejected anything unparsable, so a
-    // failure here means the stored value itself is corrupt.
-    private static Coordinates ParseLocation(string location) =>
-        CoordinatesParser.TryParse(location, out var coordinates)
-            ? coordinates
-            : throw new InvalidOperationException($"Stored location '{location}' is not a valid point.");
 }
